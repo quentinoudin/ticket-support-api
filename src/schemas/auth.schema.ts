@@ -21,4 +21,10 @@ export const loginSchema = z
   })
   .strict();
 
+export const refreshTokenSchema = z
+  .object({
+    refreshToken: z.string({ error: "Le jeton de rafraîchissement est obligatoire" }).min(1),
+  })
+  .strict();
+
 export type LoginInput = z.infer<typeof loginSchema>;

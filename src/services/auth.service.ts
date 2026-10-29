@@ -2,9 +2,15 @@ import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/password.js";
 import type { LoginInput } from "../schemas/auth.schema.js";
-import { signAccessToken } from "./token.service.js";
+import {
+  hashToken,
+  issueRefreshToken,
+  revokeRefreshFamily,
+  signAccessToken,
+} from "./token.service.js";
 
 const INVALID_CREDENTIALS = "Email ou mot de passe incorrect";
+const INVALID_REFRESH = "Jeton de rafraîchissement invalide ou expiré";
 
 export function toPublicUser(user: { id: string; email: string; role: string; status: string }) {
   return { id: user.id, email: user.email, role: user.role, status: user.status };
@@ -26,8 +32,65 @@ export async function login({ email, password }: LoginInput) {
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
+  const refresh = await issueRefreshToken(user.id);
+
   return {
     accessToken: signAccessToken(user),
+    refreshToken: refresh.token,
     user: toPublicUser(user),
   };
+}
+
+export async function refresh(refreshToken: string) {
+  const record = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashToken(refreshToken) },
+    include: { user: true },
+  });
+
+  if (!record) {
+    throw new AppError(INVALID_REFRESH, 401);
+  }
+
+  // Un jeton déjà utilisé qui revient est un signe de vol : on coupe toute la chaîne.
+  if (record.revokedAt) {
+    await revokeRefreshFamily(record.familyId);
+    throw new AppError(INVALID_REFRESH, 401);
+  }
+
+  if (record.expiresAt <= new Date()) {
+    throw new AppError(INVALID_REFRESH, 401);
+  }
+
+  if (record.user.status !== "ACTIVE") {
+    await revokeRefreshFamily(record.familyId);
+    throw new AppError(INVALID_REFRESH, 401);
+  }
+
+  // Révocation atomique : si deux requêtes arrivent en même temps, une seule passe.
+  const revoked = await prisma.refreshToken.updateMany({
+    where: { id: record.id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+
+  if (revoked.count === 0) {
+    await revokeRefreshFamily(record.familyId);
+    throw new AppError(INVALID_REFRESH, 401);
+  }
+
+  const next = await issueRefreshToken(record.userId, record.familyId);
+  await prisma.refreshToken.update({ where: { id: record.id }, data: { replacedById: next.id } });
+
+  return {
+    accessToken: signAccessToken(record.user),
+    refreshToken: next.token,
+  };
+}
+
+export async function logout(refreshToken: string) {
+  const record = await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(refreshToken) } });
+
+  // Idempotent : un jeton inconnu ne révèle rien.
+  if (record) {
+    await revokeRefreshFamily(record.familyId);
+  }
 }
