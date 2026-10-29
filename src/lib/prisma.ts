@@ -1,13 +1,8 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
+import { env } from "../config/env.js";
 import { PrismaClient } from "../generated/prisma/client.js";
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("La variable DATABASE_URL est obligatoire");
-}
-
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 
 export const prisma = new PrismaClient({ adapter });
