@@ -1,3 +1,4 @@
+import { hasRoleAtLeast } from "../auth/permissions.js";
 import { AppError } from "../errors/app-error.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
@@ -7,14 +8,23 @@ import type {
   ReplaceTicketInput,
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
+import type { Actor } from "./user.service.js";
 
-export async function createTicket(data: CreateTicketInput) {
-  return prisma.ticket.create({ data });
+const NOT_FOUND = "Ticket introuvable";
+
+// Un USER ne voit que ses propres tickets ; AGENT et au-dessus voient tout.
+function visibleTo(actor: Actor): Prisma.TicketWhereInput {
+  return hasRoleAtLeast(actor.role, "AGENT") ? {} : { createdById: actor.id };
 }
 
-export async function listTickets(filters: ListTicketsInput) {
+export async function createTicket(actor: Actor, data: CreateTicketInput) {
+  return prisma.ticket.create({ data: { ...data, createdById: actor.id } });
+}
+
+export async function listTickets(actor: Actor, filters: ListTicketsInput) {
   const { page, limit, status, priority } = filters;
   const where: Prisma.TicketWhereInput = {
+    ...visibleTo(actor),
     ...(status && { status }),
     ...(priority && { priority }),
   };
@@ -32,11 +42,11 @@ export async function listTickets(filters: ListTicketsInput) {
   return { tickets, total };
 }
 
-export async function getTicketById(id: string) {
-  const ticket = await prisma.ticket.findUnique({ where: { id } });
+export async function getTicketById(actor: Actor, id: string) {
+  const ticket = await prisma.ticket.findFirst({ where: { id, ...visibleTo(actor) } });
 
   if (!ticket) {
-    throw new AppError("Ticket introuvable", 404);
+    throw new AppError(NOT_FOUND, 404);
   }
 
   return ticket;
@@ -46,7 +56,16 @@ export async function replaceTicket(id: string, data: ReplaceTicketInput) {
   return prisma.ticket.update({ where: { id }, data });
 }
 
-export async function updateTicket(id: string, data: UpdateTicketInput) {
+export async function updateTicket(actor: Actor, id: string, data: UpdateTicketInput) {
+  // Un USER ne peut modifier que le titre et la description de ses propres tickets.
+  if (!hasRoleAtLeast(actor.role, "AGENT")) {
+    if (data.status !== undefined || data.priority !== undefined) {
+      throw new AppError("Vous ne pouvez pas modifier le statut ou la priorité", 403);
+    }
+
+    await getTicketById(actor, id);
+  }
+
   return prisma.ticket.update({ where: { id }, data });
 }
 
