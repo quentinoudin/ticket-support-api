@@ -5,6 +5,7 @@ import { prisma } from "./lib/prisma.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { ticketRouter } from "./routes/ticket.routes.js";
+import { userRouter } from "./routes/user.routes.js";
 
 export const app = express();
 
@@ -21,6 +22,7 @@ app.get("/health", async (_request, response) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/users", userRouter);
 app.use("/tickets", ticketRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);

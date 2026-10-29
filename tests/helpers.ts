@@ -4,6 +4,13 @@ import { prisma } from "../src/lib/prisma.js";
 
 export const TEST_PASSWORD = "Motdepasse123";
 
+export async function tokenFor(user: { email: string }): Promise<string> {
+  const { default: request } = await import("supertest");
+  const { app } = await import("../src/app.js");
+  const response = await request(app).post("/auth/login").send({ email: user.email, password: TEST_PASSWORD });
+  return response.body.data.accessToken as string;
+}
+
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "RefreshToken", "OneTimeToken", "Ticket", "User" RESTART IDENTITY CASCADE',
