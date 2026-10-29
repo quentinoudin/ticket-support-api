@@ -2,7 +2,13 @@ import type { Request, Response } from "express";
 
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
-import { acceptInviteSchema, loginSchema, refreshTokenSchema } from "../schemas/auth.schema.js";
+import {
+  acceptInviteSchema,
+  forgotPasswordSchema,
+  loginSchema,
+  refreshTokenSchema,
+  resetPasswordSchema,
+} from "../schemas/auth.schema.js";
 import * as authService from "../services/auth.service.js";
 
 export async function login(request: Request, response: Response): Promise<void> {
@@ -14,6 +20,20 @@ export async function login(request: Request, response: Response): Promise<void>
 export async function acceptInvite(request: Request, response: Response): Promise<void> {
   const input = acceptInviteSchema.parse(request.body);
   response.status(200).json({ data: await authService.acceptInvite(input) });
+}
+
+export async function forgotPassword(request: Request, response: Response): Promise<void> {
+  const input = forgotPasswordSchema.parse(request.body);
+  await authService.forgotPassword(input);
+  response.status(200).json({
+    message: "Si un compte actif existe pour cet email, un lien de réinitialisation vient d'être envoyé.",
+  });
+}
+
+export async function resetPassword(request: Request, response: Response): Promise<void> {
+  const input = resetPasswordSchema.parse(request.body);
+  await authService.resetPassword(input);
+  response.status(204).send();
 }
 
 export async function refresh(request: Request, response: Response): Promise<void> {

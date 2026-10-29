@@ -1,11 +1,20 @@
+import { env } from "../config/env.js";
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
-import type { AcceptInviteInput, LoginInput } from "../schemas/auth.schema.js";
+import type {
+  AcceptInviteInput,
+  ForgotPasswordInput,
+  LoginInput,
+  ResetPasswordInput,
+} from "../schemas/auth.schema.js";
+import { sendPasswordResetEmail } from "./mail.service.js";
 import {
   consumeOneTimeToken,
   hashToken,
+  issueOneTimeToken,
   issueRefreshToken,
+  revokeAllRefreshTokens,
   revokeRefreshFamily,
   signAccessToken,
 } from "./token.service.js";
@@ -55,6 +64,40 @@ export async function acceptInvite({ token, password }: AcceptInviteInput) {
   });
 
   return toPublicUser(activated);
+}
+
+// Ne révèle jamais si l'email existe : l'appelant répond toujours la même chose.
+export async function forgotPassword({ email }: ForgotPasswordInput) {
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || user.status !== "ACTIVE") {
+    return;
+  }
+
+  const token = await issueOneTimeToken(user.id, "PASSWORD_RESET", env.RESET_TTL_MINUTES * 60 * 1000);
+
+  try {
+    await sendPasswordResetEmail(user.email, token);
+  } catch (error) {
+    console.error("Échec d'envoi de l'email de réinitialisation :", error instanceof Error ? error.message : error);
+  }
+}
+
+export async function resetPassword({ token, password }: ResetPasswordInput) {
+  const user = await consumeOneTimeToken(token, "PASSWORD_RESET");
+
+  if (user.status !== "ACTIVE") {
+    throw new AppError("Lien invalide ou expiré", 400);
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
+
+  // Les sessions ouvertes et les autres liens de réinitialisation ne doivent plus fonctionner.
+  await revokeAllRefreshTokens(user.id);
+  await prisma.oneTimeToken.updateMany({
+    where: { userId: user.id, type: "PASSWORD_RESET", usedAt: null },
+    data: { usedAt: new Date() },
+  });
 }
 
 export async function refresh(refreshToken: string) {
