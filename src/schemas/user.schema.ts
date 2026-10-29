@@ -13,6 +13,13 @@ export const userIdSchema = z.object({
   id: z.uuid("L'identifiant de l'utilisateur doit être un UUID valide"),
 });
 
+export const createUserSchema = z
+  .object({
+    email: emailSchema,
+    role: roleSchema,
+  })
+  .strict();
+
 export const listUsersSchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
@@ -33,5 +40,6 @@ export const updateUserSchema = z
     message: "Au moins un champ doit être fourni",
   });
 
+export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type ListUsersInput = z.infer<typeof listUsersSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

@@ -1,9 +1,11 @@
 import { canManageRole, manageableRoles } from "../auth/permissions.js";
+import { env } from "../config/env.js";
 import { AppError } from "../errors/app-error.js";
 import type { Prisma, UserRole } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
-import type { ListUsersInput, UpdateUserInput } from "../schemas/user.schema.js";
-import { revokeAllRefreshTokens } from "./token.service.js";
+import type { CreateUserInput, ListUsersInput, UpdateUserInput } from "../schemas/user.schema.js";
+import { sendInvitationEmail } from "./mail.service.js";
+import { issueOneTimeToken, revokeAllRefreshTokens } from "./token.service.js";
 
 export interface Actor {
   id: string;
@@ -34,6 +36,43 @@ async function getManagedUser(actor: Actor, id: string) {
   }
 
   return user;
+}
+
+// Émet un nouveau jeton d'invitation et l'envoie. Un échec d'envoi n'annule pas le compte :
+// on renvoie `false` et l'invitation peut être renvoyée via POST /users/:id/resend-invite.
+async function sendInvitation(userId: string, email: string): Promise<boolean> {
+  const token = await issueOneTimeToken(userId, "INVITE", env.INVITE_TTL_HOURS * 60 * 60 * 1000);
+
+  try {
+    await sendInvitationEmail(email, token);
+    return true;
+  } catch (error) {
+    console.error("Échec d'envoi de l'email d'invitation :", error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
+export async function createUser(actor: Actor, input: CreateUserInput) {
+  if (!canManageRole(actor.role, input.role)) {
+    throw new AppError("Vous ne pouvez pas attribuer ce rôle", 403);
+  }
+
+  const user = await prisma.user.create({
+    data: { email: input.email, role: input.role, status: "INVITED", createdById: actor.id },
+    select: userSelect,
+  });
+
+  return { user, emailSent: await sendInvitation(user.id, user.email) };
+}
+
+export async function resendInvitation(actor: Actor, id: string) {
+  const target = await getManagedUser(actor, id);
+
+  if (target.status !== "INVITED") {
+    throw new AppError("Ce compte a déjà été activé", 409);
+  }
+
+  return { user: target, emailSent: await sendInvitation(target.id, target.email) };
 }
 
 export async function listUsers(actor: Actor, filters: ListUsersInput) {

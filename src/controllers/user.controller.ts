@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { listUsersSchema, updateUserSchema, userIdSchema } from "../schemas/user.schema.js";
+import { createUserSchema, listUsersSchema, updateUserSchema, userIdSchema } from "../schemas/user.schema.js";
 import * as userService from "../services/user.service.js";
 
 export async function list(request: Request, response: Response): Promise<void> {
@@ -16,6 +16,18 @@ export async function list(request: Request, response: Response): Promise<void> 
       totalPages: Math.ceil(total / filters.limit),
     },
   });
+}
+
+export async function create(request: Request, response: Response): Promise<void> {
+  const input = createUserSchema.parse(request.body);
+  const { user, emailSent } = await userService.createUser(request.user!, input);
+  response.status(201).json({ data: user, emailSent });
+}
+
+export async function resendInvite(request: Request, response: Response): Promise<void> {
+  const { id } = userIdSchema.parse(request.params);
+  const { user, emailSent } = await userService.resendInvitation(request.user!, id);
+  response.status(200).json({ data: user, emailSent });
 }
 
 export async function getSuperAdmin(_request: Request, response: Response): Promise<void> {

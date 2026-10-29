@@ -27,4 +27,12 @@ export const refreshTokenSchema = z
   })
   .strict();
 
+export const acceptInviteSchema = z
+  .object({
+    token: z.string({ error: "Le jeton est obligatoire" }).min(1, "Le jeton est obligatoire"),
+    password: passwordSchema,
+  })
+  .strict();
+
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

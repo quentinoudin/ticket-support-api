@@ -1,8 +1,9 @@
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
-import { verifyPassword } from "../lib/password.js";
-import type { LoginInput } from "../schemas/auth.schema.js";
+import { hashPassword, verifyPassword } from "../lib/password.js";
+import type { AcceptInviteInput, LoginInput } from "../schemas/auth.schema.js";
 import {
+  consumeOneTimeToken,
   hashToken,
   issueRefreshToken,
   revokeRefreshFamily,
@@ -39,6 +40,21 @@ export async function login({ email, password }: LoginInput) {
     refreshToken: refresh.token,
     user: toPublicUser(user),
   };
+}
+
+export async function acceptInvite({ token, password }: AcceptInviteInput) {
+  const user = await consumeOneTimeToken(token, "INVITE");
+
+  if (user.status !== "INVITED") {
+    throw new AppError("Lien invalide ou expiré", 400);
+  }
+
+  const activated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(password), status: "ACTIVE" },
+  });
+
+  return toPublicUser(activated);
 }
 
 export async function refresh(refreshToken: string) {

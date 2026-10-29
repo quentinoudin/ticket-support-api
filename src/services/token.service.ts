@@ -4,7 +4,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 
 import { env } from "../config/env.js";
 import { AppError } from "../errors/app-error.js";
-import type { UserRole } from "../generated/prisma/client.js";
+import type { OneTimeTokenType, UserRole } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 
 export interface AccessTokenPayload {
@@ -53,6 +53,44 @@ export async function issueRefreshToken(userId: string, familyId: string = rando
   });
 
   return { token, id: record.id };
+}
+
+// Émet un jeton à usage unique et invalide les précédents du même type pour cet utilisateur.
+export async function issueOneTimeToken(userId: string, type: OneTimeTokenType, ttlMs: number) {
+  const token = generateOpaqueToken();
+
+  await prisma.$transaction([
+    prisma.oneTimeToken.updateMany({
+      where: { userId, type, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.oneTimeToken.create({
+      data: { userId, type, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) },
+    }),
+  ]);
+
+  return token;
+}
+
+// Consomme le jeton de façon atomique : deux requêtes simultanées ne peuvent pas l'utiliser toutes les deux.
+export async function consumeOneTimeToken(token: string, type: OneTimeTokenType) {
+  const tokenHash = hashToken(token);
+
+  const consumed = await prisma.oneTimeToken.updateMany({
+    where: { tokenHash, type, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  });
+
+  if (consumed.count === 0) {
+    throw new AppError("Lien invalide ou expiré", 400);
+  }
+
+  const record = await prisma.oneTimeToken.findUniqueOrThrow({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  return record.user;
 }
 
 export function revokeRefreshFamily(familyId: string) {
