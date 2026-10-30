@@ -15,6 +15,7 @@ const envSchema = z.object({
 
   SMTP_HOST: z.string().default("localhost"),
   SMTP_PORT: z.coerce.number().int().positive().default(1026),
+  BREVO_API_KEY: z.string().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default("Support Tickets <no-reply@ticket.local>"),

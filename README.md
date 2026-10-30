@@ -31,6 +31,7 @@ L'API est disponible sur http://localhost:3000. Les emails envoyés en développ
 | `RESET_TTL_MINUTES` | Validité d'un lien de réinitialisation | `60` |
 | `APP_URL` | Base des liens envoyés par email | `http://localhost:3000` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | Serveur d'envoi | Mailpit local |
+| `BREVO_API_KEY` | Envoi par l'API HTTP de Brevo (port 443) au lieu du SMTP, utile si le réseau bloque le SMTP. Remplace le SMTP quand elle est renseignée. `MAIL_FROM` doit être un expéditeur vérifié dans Brevo | vide |
 | `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | Compte créé par le seed | — |
 
 La base de test doit exister une fois : `docker exec ticket-support-postgres createdb -U ticket_user ticket_support_test`. Les migrations y sont appliquées automatiquement avant les tests, qui ne touchent jamais la base de développement.
