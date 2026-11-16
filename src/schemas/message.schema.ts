@@ -24,5 +24,11 @@ export const listMessagesSchema = z
   })
   .strict();
 
+// L'utilisateur dit si la réponse de l'assistant a réglé son problème.
+export const feedbackSchema = z
+  .object({ resolved: z.boolean({ error: "resolved doit être true ou false" }) })
+  .strict();
+
+export type FeedbackInput = z.infer<typeof feedbackSchema>;
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;
 export type ListMessagesInput = z.infer<typeof listMessagesSchema>;

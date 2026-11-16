@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { recordAudit } from "../services/audit.service.js";
 import { aiConfig } from "./config.js";
 import { containsForbiddenContent } from "./guards.js";
+import { enqueueJob } from "./jobs.js";
 import { ESCALATION_NOTICE, OFF_TOPIC_REFUSAL } from "./messages.js";
 import { buildReplyMessages } from "./prompts/reply.js";
 import { buildTriageMessages } from "./prompts/triage.js";
@@ -26,8 +27,8 @@ export type EscalationReason =
   | "USER_QUOTA_EXCEEDED"
   | "MAX_TURNS"
   | "USER_NOT_SATISFIED"
-  | "HUMAN_TOOK_OVER"
-  | "USER_CONTESTED_OFF_TOPIC";
+  | "USER_CONTESTED_OFF_TOPIC"
+  | "AI_DISABLED";
 
 type Handling = "NONE" | "PENDING" | "ANSWERED" | "ESCALATED" | "OFF_TOPIC";
 
@@ -76,11 +77,13 @@ async function callAndParse<T>(options: {
 export async function escalateTicket(
   ticketId: string,
   reason: EscalationReason,
-  from: Handling[] = ["PENDING", "ANSWERED"],
+  options: { from?: Handling[]; reopen?: boolean } = {},
 ): Promise<boolean> {
+  const { from = ["PENDING", "ANSWERED"], reopen = false } = options;
+
   const updated = await prisma.ticket.updateMany({
     where: { id: ticketId, aiHandling: { in: from } },
-    data: { aiHandling: "ESCALATED", aiEscalationReason: reason },
+    data: { aiHandling: "ESCALATED", aiEscalationReason: reason, ...(reopen && { status: "OPEN" as const }) },
   });
 
   if (updated.count === 0) {
@@ -268,10 +271,116 @@ async function handleTriageAndReply(ticketId: string): Promise<void> {
   await replyToTicket(ticket, triage.category);
 }
 
+async function aiReplyCount(ticketId: string): Promise<number> {
+  return prisma.ticketMessage.count({ where: { ticketId, sender: "AI" } });
+}
+
+// L'utilisateur a répondu à l'assistant : on lui répond, dans la limite de AI_MAX_TURNS réponses.
+async function handleFollowUp(ticketId: string): Promise<void> {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      requestedPriority: true,
+      priorityLockedByHuman: true,
+      aiCategory: true,
+      createdById: true,
+      aiHandling: true,
+      status: true,
+    },
+  });
+
+  // Ticket supprimé, fermé, repris par un humain ou déjà escaladé : l'assistant ne dit plus rien.
+  if (!ticket || ticket.aiHandling !== "ANSWERED" || ticket.status === "CLOSED") {
+    return;
+  }
+
+  // Deux messages envoyés coup sur coup créent deux tâches : seule la première répond, la seconde
+  // voit que la dernière parole est déjà celle de l'assistant.
+  const last = await prisma.ticketMessage.findFirst({
+    where: { ticketId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { sender: true },
+  });
+
+  if (last?.sender !== "USER") {
+    return;
+  }
+
+  if ((await aiReplyCount(ticketId)) >= aiConfig.maxTurns) {
+    await escalateTicket(ticketId, "MAX_TURNS");
+    return;
+  }
+
+  await replyToTicket(ticket, ticket.aiCategory);
+}
+
 export async function handleJob(job: AiJob): Promise<void> {
   if (job.type === "TRIAGE_AND_REPLY") {
     await handleTriageAndReply(job.ticketId);
+  } else if (job.type === "FOLLOW_UP") {
+    await handleFollowUp(job.ticketId);
   }
+}
+
+// Un agent ou un admin écrit dans le ticket : l'équipe a pris la main, l'assistant se retire pour
+// de bon. Pas de message à l'utilisateur, puisqu'un humain lui parle déjà.
+async function withdrawAi(ticketId: string): Promise<void> {
+  const updated = await prisma.ticket.updateMany({
+    where: { id: ticketId, aiHandling: { in: ["PENDING", "ANSWERED"] } },
+    data: { aiHandling: "NONE", aiEscalationReason: "HUMAN_TOOK_OVER" },
+  });
+
+  if (updated.count > 0) {
+    await recordAudit({
+      action: "AI_WITHDRAWN",
+      actor: AI_ACTOR,
+      targetType: "Ticket",
+      targetId: ticketId,
+      metadata: { reason: "HUMAN_TOOK_OVER" },
+    });
+  }
+}
+
+// Appelé après chaque nouveau message d'un ticket. `ticket` est l'état AVANT ce message.
+export async function onMessageCreated(
+  ticket: { id: string; aiHandling: Handling },
+  message: { id: string; sender: "USER" | "STAFF" | "AI" },
+): Promise<void> {
+  if (message.sender === "STAFF") {
+    await withdrawAi(ticket.id);
+    return;
+  }
+
+  if (message.sender !== "USER") {
+    return;
+  }
+
+  // Un ticket fermé « hors sujet » par erreur : l'utilisateur répond, un humain le rouvre et tranche.
+  if (ticket.aiHandling === "OFF_TOPIC") {
+    await escalateTicket(ticket.id, "USER_CONTESTED_OFF_TOPIC", { from: ["OFF_TOPIC"], reopen: true });
+    return;
+  }
+
+  if (ticket.aiHandling !== "ANSWERED") {
+    return;
+  }
+
+  // L'assistant a été désactivé depuis sa dernière réponse : un humain reprend.
+  if (!aiConfig.enabled) {
+    await escalateTicket(ticket.id, "AI_DISABLED");
+    return;
+  }
+
+  if ((await aiReplyCount(ticket.id)) >= aiConfig.maxTurns) {
+    await escalateTicket(ticket.id, "MAX_TURNS");
+    return;
+  }
+
+  await enqueueJob({ type: "FOLLOW_UP", ticketId: ticket.id, messageId: message.id });
 }
 
 // Une tâche qui échoue pour de bon ne doit jamais laisser le ticket sans réponse : un humain le reprend.

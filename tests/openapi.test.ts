@@ -32,6 +32,7 @@ const documentedOperations = [
   "delete /tickets/{id}",
   "get /tickets/{id}/messages",
   "post /tickets/{id}/messages",
+  "post /tickets/{id}/feedback",
   "get /audit-logs",
 ];
 

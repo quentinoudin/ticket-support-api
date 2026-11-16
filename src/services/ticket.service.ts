@@ -65,11 +65,15 @@ function ticketChanges(before: Ticket, after: Ticket): Prisma.InputJsonObject {
 }
 
 export async function listTickets(actor: Actor, filters: ListTicketsInput) {
-  const { page, limit, status, priority, sortBy, order } = filters;
+  const { page, limit, status, priority, sortBy, order, needsHuman, aiHandling } = filters;
+  const waitingForHuman: Prisma.TicketWhereInput = { aiHandling: "ESCALATED", status: { not: "CLOSED" } };
   const where: Prisma.TicketWhereInput = {
     ...visibleTo(actor),
     ...(status && { status }),
     ...(priority && { priority }),
+    ...(aiHandling && { aiHandling }),
+    ...(needsHuman === true && waitingForHuman),
+    ...(needsHuman === false && { NOT: waitingForHuman }),
   };
 
   const [tickets, total] = await prisma.$transaction([

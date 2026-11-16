@@ -26,6 +26,8 @@ export const auditActions = [
   "AI_PRIORITY_CHANGED",
   "AI_ESCALATED",
   "AI_OFF_TOPIC_CLOSED",
+  "AI_WITHDRAWN",
+  "TICKET_FEEDBACK_SUBMITTED",
 ] as const;
 
 export type AuditAction = (typeof auditActions)[number];

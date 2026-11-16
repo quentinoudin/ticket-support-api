@@ -10,7 +10,7 @@ import {
   resetPasswordSchema,
 } from "../schemas/auth.schema.js";
 import { listAuditLogsSchema } from "../schemas/audit.schema.js";
-import { createMessageSchema, listMessagesSchema } from "../schemas/message.schema.js";
+import { createMessageSchema, feedbackSchema, listMessagesSchema } from "../schemas/message.schema.js";
 import {
   createTicketSchema,
   listTicketsSchema,
@@ -518,7 +518,8 @@ export function buildOpenApiDocument() {
         get: operation({
           tag: "Tickets",
           summary: "Lister les tickets",
-          description: "Un USER ne voit que ses propres tickets. Les autres rôles voient tout.",
+          description:
+            "Un USER ne voit que ses propres tickets. Les autres rôles voient tout. `needsHuman=true` liste les tickets que l'assistant IA n'a pas su traiter et qui attendent un humain (escaladés, pas encore fermés).",
           parameters: queryParameters(listTicketsSchema),
           success: { status: 200, description: "Liste paginée", schema: paginated(ref("Ticket")) },
           errors: [400],
@@ -579,6 +580,19 @@ export function buildOpenApiDocument() {
           body: createMessageSchema,
           success: { status: 201, description: "Message ajouté", schema: data(ref("TicketMessage")) },
           errors: [400, 404, 409, 429],
+        }),
+      },
+
+      "/tickets/{id}/feedback": {
+        post: operation({
+          tag: "Tickets",
+          summary: "Dire si la réponse de l'assistant a réglé le problème",
+          description:
+            "Réservé à l'auteur du ticket, une seule fois, et seulement quand l'assistant a répondu (`aiHandling=ANSWERED`). `resolved: true` ferme le ticket ; `resolved: false` le passe à l'équipe support (`aiHandling=ESCALATED`).",
+          parameters: [idParameter],
+          body: feedbackSchema,
+          success: { status: 200, description: "Avis enregistré", schema: data(ref("Ticket")) },
+          errors: [400, 403, 404, 409, 429],
         }),
       },
 

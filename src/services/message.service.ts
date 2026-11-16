@@ -1,3 +1,4 @@
+import { onMessageCreated } from "../ai/ai.service.js";
 import { hasRoleAtLeast } from "../auth/permissions.js";
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
@@ -59,6 +60,14 @@ export async function createMessage(actor: Actor, ticketId: string, input: Creat
     targetId: ticketId,
     metadata: { messageId: message.id, sender: message.sender, length: message.content.length },
   });
+
+  // L'assistant réagit : relance, prise de relais humaine, contestation d'un refus hors sujet.
+  // Une erreur ici ne doit jamais faire perdre le message que l'utilisateur vient d'envoyer.
+  try {
+    await onMessageCreated({ id: ticket.id, aiHandling: ticket.aiHandling }, { id: message.id, sender: message.sender });
+  } catch (error) {
+    console.error("Échec du traitement du message par l'assistant :", error instanceof Error ? error.message : error);
+  }
 
   return { message: toPublicMessage(message, actor), ticket };
 }

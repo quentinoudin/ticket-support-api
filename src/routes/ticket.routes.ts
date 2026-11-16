@@ -19,3 +19,4 @@ ticketRouter.delete("/:id", requireRole("ADMIN"), ticketController.remove);
 
 ticketRouter.get("/:id/messages", messageController.list);
 ticketRouter.post("/:id/messages", messageLimiter, messageController.create);
+ticketRouter.post("/:id/feedback", messageLimiter, messageController.feedback);
