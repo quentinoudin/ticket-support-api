@@ -1,7 +1,18 @@
-import type { ErrorRequestHandler, RequestHandler } from "express";
+import type { ErrorRequestHandler, RequestHandler, Response } from "express";
 import { ZodError } from "zod";
 
-import { AppError } from "../errors/app-error.js";
+import { AppError, type ErrorCode } from "../errors/app-error.js";
+
+// Toutes les erreurs de l'API ont la même forme : { error, code, details? }.
+export interface ErrorBody {
+  error: string;
+  code: ErrorCode;
+  details?: { field: string; message: string }[];
+}
+
+function sendError(response: Response, status: number, body: ErrorBody) {
+  response.status(status).json(body);
+}
 
 export const notFoundHandler: RequestHandler = (request, _response, next) => {
   next(new AppError(`Route ${request.method} ${request.path} introuvable`, 404));
@@ -16,10 +27,18 @@ function isPrismaKnownRequestError(error: unknown): error is Error & { code: str
   );
 }
 
+// Erreurs levées par le parseur JSON d'Express (body-parser).
+function bodyParserType(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "type" in error && typeof error.type === "string"
+    ? error.type
+    : undefined;
+}
+
 export const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
   if (error instanceof ZodError) {
-    response.status(400).json({
+    sendError(response, 400, {
       error: "Données invalides",
+      code: "VALIDATION_ERROR",
       details: error.issues.map((issue) => ({
         field: issue.path.join("."),
         message: issue.message,
@@ -29,27 +48,35 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
   }
 
   if (error instanceof AppError) {
-    response.status(error.statusCode).json({ error: error.message });
+    sendError(response, error.statusCode, { error: error.message, code: error.code });
     return;
   }
 
   if (isPrismaKnownRequestError(error)) {
     if (error.code === "P2025") {
-      response.status(404).json({ error: "Ticket introuvable" });
+      sendError(response, 404, { error: "Ressource introuvable", code: "NOT_FOUND" });
       return;
     }
 
     if (error.code === "P2002") {
-      response.status(409).json({ error: "Cette ressource existe déjà" });
+      sendError(response, 409, { error: "Cette ressource existe déjà", code: "CONFLICT" });
       return;
     }
   }
 
-  if (error instanceof SyntaxError && "status" in error && error.status === 400) {
-    response.status(400).json({ error: "Le corps JSON est invalide" });
+  const parserType = bodyParserType(error);
+
+  if (parserType === "entity.too.large") {
+    sendError(response, 413, { error: "Le corps de la requête est trop volumineux", code: "PAYLOAD_TOO_LARGE" });
     return;
   }
 
+  if (parserType === "entity.parse.failed") {
+    sendError(response, 400, { error: "Le corps JSON est invalide", code: "INVALID_JSON" });
+    return;
+  }
+
+  // Détail uniquement dans les logs serveur : jamais renvoyé au client.
   console.error(error);
-  response.status(500).json({ error: "Erreur interne du serveur" });
+  sendError(response, 500, { error: "Erreur interne du serveur", code: "INTERNAL_ERROR" });
 };
