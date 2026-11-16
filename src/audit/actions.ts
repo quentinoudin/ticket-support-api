@@ -20,6 +20,7 @@ export const auditActions = [
   "TICKET_UPDATED",
   "TICKET_REPLACED",
   "TICKET_DELETED",
+  "TICKET_MESSAGE_ADDED",
 ] as const;
 
 export type AuditAction = (typeof auditActions)[number];

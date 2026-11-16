@@ -10,6 +10,7 @@ import {
   resetPasswordSchema,
 } from "../schemas/auth.schema.js";
 import { listAuditLogsSchema } from "../schemas/audit.schema.js";
+import { createMessageSchema, listMessagesSchema } from "../schemas/message.schema.js";
 import {
   createTicketSchema,
   listTicketsSchema,
@@ -221,8 +222,43 @@ export function buildOpenApiDocument() {
             status: { type: "string", enum: ["OPEN", "IN_PROGRESS", "CLOSED"] },
             priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "URGENT"] },
             createdById: { type: "string", format: "uuid", nullable: true },
+            requestedPriority: {
+              type: "string",
+              enum: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+              nullable: true,
+              description: "Priorité choisie par l'utilisateur, conservée quand l'assistant IA la reclasse.",
+            },
+            priorityLockedByHuman: { type: "boolean", description: "Vrai dès qu'un agent ou un admin a fixé la priorité : l'IA n'y touche plus." },
+            aiPriorityReason: { type: "string", nullable: true },
+            aiCategory: {
+              type: "string",
+              enum: ["HARDWARE", "SOFTWARE", "NETWORK", "ACCOUNT_ACCESS", "EMAIL", "PRINTING", "SECURITY", "OTHER"],
+              nullable: true,
+            },
+            aiHandling: {
+              type: "string",
+              enum: ["NONE", "PENDING", "ANSWERED", "ESCALATED", "OFF_TOPIC"],
+              description: "Où en est le traitement par l'assistant IA. ESCALATED signifie qu'un humain doit s'en occuper.",
+            },
+            aiEscalationReason: { type: "string", nullable: true },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        TicketMessage: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            ticketId: { type: "string", format: "uuid" },
+            sender: { type: "string", enum: ["USER", "STAFF", "AI"] },
+            content: { type: "string" },
+            authorId: {
+              type: "string",
+              format: "uuid",
+              nullable: true,
+              description: "Visible uniquement par l'équipe support (AGENT et au-dessus).",
+            },
+            createdAt: { type: "string", format: "date-time" },
           },
         },
         PublicUser: {
@@ -522,6 +558,27 @@ export function buildOpenApiDocument() {
           parameters: [idParameter],
           success: { status: 204, description: "Ticket supprimé" },
           errors: [400, 403, 404],
+        }),
+      },
+
+      "/tickets/{id}/messages": {
+        get: operation({
+          tag: "Tickets",
+          summary: "Lire la conversation d'un ticket",
+          description: "Du plus ancien au plus récent. Mêmes règles de visibilité que le ticket.",
+          parameters: [idParameter, ...queryParameters(listMessagesSchema)],
+          success: { status: 200, description: "Liste paginée", schema: paginated(ref("TicketMessage")) },
+          errors: [400, 404],
+        }),
+        post: operation({
+          tag: "Tickets",
+          summary: "Écrire dans un ticket",
+          description:
+            "Un USER écrit dans ses propres tickets. Un AGENT ou au-dessus écrit comme équipe support. Un ticket fermé n'accepte plus de message de l'utilisateur (sauf s'il a été fermé comme hors sujet par l'assistant). Limité à 200 messages par ticket.",
+          parameters: [idParameter],
+          body: createMessageSchema,
+          success: { status: 201, description: "Message ajouté", schema: data(ref("TicketMessage")) },
+          errors: [400, 404, 409, 429],
         }),
       },
 
