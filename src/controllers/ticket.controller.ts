@@ -11,13 +11,13 @@ import * as ticketService from "../services/ticket.service.js";
 
 export async function create(request: Request, response: Response): Promise<void> {
   const data = createTicketSchema.parse(request.body);
-  const ticket = await ticketService.createTicket(data);
+  const ticket = await ticketService.createTicket(request.user!, data);
   response.status(201).json({ data: ticket });
 }
 
 export async function list(request: Request, response: Response): Promise<void> {
   const filters = listTicketsSchema.parse(request.query);
-  const { tickets, total } = await ticketService.listTickets(filters);
+  const { tickets, total } = await ticketService.listTickets(request.user!, filters);
 
   response.status(200).json({
     data: tickets,
@@ -32,7 +32,7 @@ export async function list(request: Request, response: Response): Promise<void> 
 
 export async function getById(request: Request, response: Response): Promise<void> {
   const { id } = ticketIdSchema.parse(request.params);
-  const ticket = await ticketService.getTicketById(id);
+  const ticket = await ticketService.getTicketById(request.user!, id);
   response.status(200).json({ data: ticket });
 }
 
@@ -46,7 +46,7 @@ export async function replace(request: Request, response: Response): Promise<voi
 export async function update(request: Request, response: Response): Promise<void> {
   const { id } = ticketIdSchema.parse(request.params);
   const data = updateTicketSchema.parse(request.body);
-  const ticket = await ticketService.updateTicket(id, data);
+  const ticket = await ticketService.updateTicket(request.user!, id, data);
   response.status(200).json({ data: ticket });
 }
 
