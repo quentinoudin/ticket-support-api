@@ -33,6 +33,7 @@ const documentedOperations = [
   "get /tickets/{id}/messages",
   "post /tickets/{id}/messages",
   "post /tickets/{id}/feedback",
+  "get /ai/status",
   "get /audit-logs",
 ];
 

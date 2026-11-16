@@ -167,6 +167,11 @@ export function buildOpenApiDocument() {
       { name: "Comptes", description: "Gestion des utilisateurs (Admin et Super Admin)" },
       { name: "Tickets" },
       { name: "Audit", description: "Journal des actions sensibles (Super Admin)" },
+      {
+        name: "Assistant IA",
+        description:
+          "Assistant de support (DeepSeek) : répond aux tickets informatiques, reclassifie la priorité et passe la main aux humains. Les textes des tickets sont envoyés à un fournisseur tiers : n'y mettez jamais de données sensibles.",
+      },
     ],
     components: {
       securitySchemes: {
@@ -593,6 +598,57 @@ export function buildOpenApiDocument() {
           body: feedbackSchema,
           success: { status: 200, description: "Avis enregistré", schema: data(ref("Ticket")) },
           errors: [400, 403, 404, 409, 429],
+        }),
+      },
+
+      "/ai/status": {
+        get: operation({
+          tag: "Assistant IA",
+          summary: "État de l'assistant IA",
+          description:
+            "Réservé aux Admin et Super Admin. Indique si l'assistant est actif, les jetons consommés aujourd'hui par rapport au budget, les appels du jour par résultat, la file d'attente et le nombre de tickets qui attendent un humain. Ne renvoie jamais la clé d'API.",
+          success: {
+            status: 200,
+            description: "État de l'assistant",
+            schema: data({
+              type: "object",
+              properties: {
+                enabled: { type: "boolean" },
+                keyConfigured: { type: "boolean" },
+                model: { type: "string" },
+                budget: {
+                  type: "object",
+                  properties: {
+                    dailyTokenBudget: { type: "integer" },
+                    tokensUsedToday: { type: "integer" },
+                    tokensRemaining: { type: "integer" },
+                    userDailyRuns: { type: "integer" },
+                  },
+                },
+                limits: {
+                  type: "object",
+                  properties: {
+                    maxTurns: { type: "integer" },
+                    offTopicMinConfidence: { type: "number" },
+                    replyMinConfidence: { type: "number" },
+                  },
+                },
+                runsToday: { type: "object", additionalProperties: { type: "integer" } },
+                queue: {
+                  type: "object",
+                  properties: { queued: { type: "integer" }, running: { type: "integer" }, failed: { type: "integer" } },
+                },
+                tickets: {
+                  type: "object",
+                  properties: {
+                    waitingForHuman: { type: "integer" },
+                    byAiHandling: { type: "object", additionalProperties: { type: "integer" } },
+                  },
+                },
+              },
+            }),
+          },
+          errors: [403],
         }),
       },
 
