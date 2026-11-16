@@ -21,6 +21,11 @@ export const auditActions = [
   "TICKET_REPLACED",
   "TICKET_DELETED",
   "TICKET_MESSAGE_ADDED",
+  // Assistant IA (acteur : « ai-assistant »)
+  "AI_REPLIED",
+  "AI_PRIORITY_CHANGED",
+  "AI_ESCALATED",
+  "AI_OFF_TOPIC_CLOSED",
 ] as const;
 
 export type AuditAction = (typeof auditActions)[number];
