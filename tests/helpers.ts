@@ -47,7 +47,7 @@ export async function tokenFor(user: { email: string }): Promise<string> {
 
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "RefreshToken", "OneTimeToken", "Ticket", "User" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "RefreshToken", "OneTimeToken", "Ticket", "AuditLog", "User" RESTART IDENTITY CASCADE',
   );
 }
 

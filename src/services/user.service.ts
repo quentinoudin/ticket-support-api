@@ -4,6 +4,7 @@ import { AppError } from "../errors/app-error.js";
 import type { Prisma, UserRole } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import type { CreateUserInput, ListUsersInput, UpdateUserInput } from "../schemas/user.schema.js";
+import { diffFields, recordAudit } from "./audit.service.js";
 import { sendInvitationEmail } from "./mail.service.js";
 import { issueOneTimeToken, revokeAllRefreshTokens } from "./token.service.js";
 
@@ -62,7 +63,16 @@ export async function createUser(actor: Actor, input: CreateUserInput) {
     select: userSelect,
   });
 
-  return { user, emailSent: await sendInvitation(user.id, user.email) };
+  const emailSent = await sendInvitation(user.id, user.email);
+
+  await recordAudit({
+    action: "USER_INVITED",
+    targetType: "User",
+    targetId: user.id,
+    metadata: { email: user.email, role: user.role, emailSent },
+  });
+
+  return { user, emailSent };
 }
 
 export async function resendInvitation(actor: Actor, id: string) {
@@ -72,7 +82,16 @@ export async function resendInvitation(actor: Actor, id: string) {
     throw new AppError("Ce compte a déjà été activé", 409);
   }
 
-  return { user: target, emailSent: await sendInvitation(target.id, target.email) };
+  const emailSent = await sendInvitation(target.id, target.email);
+
+  await recordAudit({
+    action: "USER_INVITE_RESENT",
+    targetType: "User",
+    targetId: target.id,
+    metadata: { email: target.email, emailSent },
+  });
+
+  return { user: target, emailSent };
 }
 
 export async function listUsers(actor: Actor, filters: ListUsersInput) {
@@ -118,22 +137,50 @@ export async function getSuperAdmin() {
 }
 
 export async function updateUser(actor: Actor, id: string, input: UpdateUserInput) {
-  await getManagedUser(actor, id);
+  const before = await getManagedUser(actor, id);
 
   if (input.role && !canManageRole(actor.role, input.role)) {
     throw new AppError("Vous ne pouvez pas attribuer ce rôle", 403);
   }
 
-  return prisma.user.update({ where: { id }, data: input, select: userSelect });
+  const after = await prisma.user.update({ where: { id }, data: input, select: userSelect });
+
+  // Un changement de rôle est l'événement le plus sensible : il a sa propre entrée.
+  if (before.role !== after.role) {
+    await recordAudit({
+      action: "USER_ROLE_CHANGED",
+      targetType: "User",
+      targetId: id,
+      metadata: diffFields(before, after, ["role"]),
+    });
+  }
+
+  if (before.email !== after.email) {
+    await recordAudit({
+      action: "USER_UPDATED",
+      targetType: "User",
+      targetId: id,
+      metadata: diffFields(before, after, ["email"]),
+    });
+  }
+
+  return after;
 }
 
 export async function disableUser(actor: Actor, id: string) {
-  await getManagedUser(actor, id);
+  const before = await getManagedUser(actor, id);
 
   const [user] = await prisma.$transaction([
     prisma.user.update({ where: { id }, data: { status: "DISABLED" }, select: userSelect }),
     prisma.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
   ]);
+
+  await recordAudit({
+    action: "USER_DISABLED",
+    targetType: "User",
+    targetId: id,
+    metadata: { email: before.email, previousStatus: before.status },
+  });
 
   return user;
 }
@@ -145,12 +192,29 @@ export async function enableUser(actor: Actor, id: string) {
   const full = await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { passwordHash: true } });
   const status = full.passwordHash ? "ACTIVE" : "INVITED";
 
-  return prisma.user.update({ where: { id }, data: { status }, select: userSelect });
+  const user = await prisma.user.update({ where: { id }, data: { status }, select: userSelect });
+
+  await recordAudit({
+    action: "USER_ENABLED",
+    targetType: "User",
+    targetId: id,
+    metadata: { email: target.email, previousStatus: target.status, status },
+  });
+
+  return user;
 }
 
 export async function deleteUser(actor: Actor, id: string) {
-  await getManagedUser(actor, id);
+  const target = await getManagedUser(actor, id);
 
   await revokeAllRefreshTokens(id);
   await prisma.user.delete({ where: { id } });
+
+  // Le compte n'existe plus : on garde son email et son rôle dans le journal.
+  await recordAudit({
+    action: "USER_DELETED",
+    targetType: "User",
+    targetId: id,
+    metadata: { email: target.email, role: target.role },
+  });
 }

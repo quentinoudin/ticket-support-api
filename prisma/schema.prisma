@@ -93,6 +93,26 @@ model OneTimeToken {
   @@index([userId, type])
 }
 
+// Journal d'audit : pas de clé étrangère vers User, pour que l'historique survive
+// à la suppression d'un compte.
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  actorId    String?
+  actorEmail String?
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
 model Ticket {
   id          String         @id @default(uuid())
   title       String         @db.VarChar(200)
