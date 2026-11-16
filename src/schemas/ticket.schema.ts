@@ -46,12 +46,18 @@ export const updateTicketSchema = replaceTicketSchema
     message: "Au moins un champ doit être fourni",
   });
 
+export const ticketSortFields = ["createdAt", "updatedAt", "title", "status", "priority"] as const;
+
 export const listTicketsSchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().positive().max(100).default(10),
     status: statusSchema.optional(),
     priority: prioritySchema.optional(),
+    sortBy: z
+      .enum(ticketSortFields, { error: `Le tri doit être l'un de : ${ticketSortFields.join(", ")}` })
+      .default("createdAt"),
+    order: z.enum(["asc", "desc"], { error: "L'ordre doit être asc ou desc" }).default("desc"),
   })
   .strict();
 

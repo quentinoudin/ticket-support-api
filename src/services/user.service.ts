@@ -76,7 +76,7 @@ export async function resendInvitation(actor: Actor, id: string) {
 }
 
 export async function listUsers(actor: Actor, filters: ListUsersInput) {
-  const { page, limit, role, status, search } = filters;
+  const { page, limit, role, status, search, sortBy, order } = filters;
   const visibleRoles = manageableRoles(actor.role);
 
   if (role && !visibleRoles.includes(role)) {
@@ -93,7 +93,7 @@ export async function listUsers(actor: Actor, filters: ListUsersInput) {
     prisma.user.findMany({
       where,
       select: userSelect,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ [sortBy]: order }, { id: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),

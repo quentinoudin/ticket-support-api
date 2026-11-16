@@ -22,7 +22,7 @@ export async function createTicket(actor: Actor, data: CreateTicketInput) {
 }
 
 export async function listTickets(actor: Actor, filters: ListTicketsInput) {
-  const { page, limit, status, priority } = filters;
+  const { page, limit, status, priority, sortBy, order } = filters;
   const where: Prisma.TicketWhereInput = {
     ...visibleTo(actor),
     ...(status && { status }),
@@ -32,7 +32,8 @@ export async function listTickets(actor: Actor, filters: ListTicketsInput) {
   const [tickets, total] = await prisma.$transaction([
     prisma.ticket.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      // L'identifiant départage les égalités pour que la pagination reste stable.
+      orderBy: [{ [sortBy]: order }, { id: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),
