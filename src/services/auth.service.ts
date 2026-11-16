@@ -26,13 +26,41 @@ export function toPublicUser(user: { id: string; email: string; role: string; st
   return { id: user.id, email: user.email, role: user.role, status: user.status };
 }
 
+// Incrémente le compteur d'échecs ; à la limite, verrouille le compte et remet le compteur à zéro.
+async function registerFailedLogin(userId: string) {
+  const { failedLoginCount } = await prisma.user.update({
+    where: { id: userId },
+    data: { failedLoginCount: { increment: 1 } },
+    select: { failedLoginCount: true },
+  });
+
+  if (failedLoginCount >= env.LOGIN_MAX_ATTEMPTS) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginCount: 0,
+        lockedUntil: new Date(Date.now() + env.LOGIN_LOCK_MINUTES * 60 * 1000),
+      },
+    });
+  }
+}
+
 export async function login({ email, password }: LoginInput) {
   const user = await prisma.user.findUnique({ where: { email } });
+
+  // Un compte verrouillé refuse toute tentative, même avec le bon mot de passe.
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    throw new AppError("Compte temporairement verrouillé suite à trop d'échecs, réessayez plus tard", 429);
+  }
 
   // Même réponse pour un email inconnu, un compte invité ou un mauvais mot de passe.
   const passwordMatches = await verifyPassword(password, user?.passwordHash ?? null);
 
   if (!user || !passwordMatches) {
+    if (user) {
+      await registerFailedLogin(user.id);
+    }
+
     throw new AppError(INVALID_CREDENTIALS, 401);
   }
 
@@ -40,7 +68,10 @@ export async function login({ email, password }: LoginInput) {
     throw new AppError("Ce compte est désactivé", 403);
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
+  });
 
   const refresh = await issueRefreshToken(user.id);
 
@@ -90,7 +121,11 @@ export async function resetPassword({ token, password }: ResetPasswordInput) {
     throw new AppError("Lien invalide ou expiré", 400);
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
+  // Une réinitialisation réussie lève aussi un éventuel verrouillage.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(password), failedLoginCount: 0, lockedUntil: null },
+  });
 
   // Les sessions ouvertes et les autres liens de réinitialisation ne doivent plus fonctionner.
   await revokeAllRefreshTokens(user.id);

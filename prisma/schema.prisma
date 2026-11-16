@@ -49,6 +49,10 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  // Verrouillage temporaire après trop d'échecs de connexion consécutifs.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
   createdBy     User?          @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers  User[]         @relation("UserCreatedBy")
   refreshTokens RefreshToken[]
