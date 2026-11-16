@@ -76,6 +76,12 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     return;
   }
 
+  // Dernier filet : un texte que PostgreSQL ne sait pas stocker est une erreur du client, pas du serveur.
+  if (error instanceof Error && error.message.includes("invalid byte sequence for encoding")) {
+    sendError(response, 400, { error: "Le texte contient un caractère interdit", code: "BAD_REQUEST" });
+    return;
+  }
+
   // Détail uniquement dans les logs serveur : jamais renvoyé au client.
   console.error(error);
   sendError(response, 500, { error: "Erreur interne du serveur", code: "INTERNAL_ERROR" });

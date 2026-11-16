@@ -94,6 +94,10 @@ export async function resendInvitation(actor: Actor, id: string) {
   return { user: target, emailSent };
 }
 
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 export async function listUsers(actor: Actor, filters: ListUsersInput) {
   const { page, limit, role, status, search, sortBy, order } = filters;
   const visibleRoles = manageableRoles(actor.role);
@@ -105,7 +109,8 @@ export async function listUsers(actor: Actor, filters: ListUsersInput) {
   const where: Prisma.UserWhereInput = {
     role: { in: role ? [role] : visibleRoles },
     ...(status && { status }),
-    ...(search && { email: { contains: search, mode: "insensitive" } }),
+    // % et _ sont des jokers en SQL : on les échappe pour que la recherche soit littérale.
+    ...(search && { email: { contains: escapeLikePattern(search), mode: "insensitive" } }),
   };
 
   const [users, total] = await prisma.$transaction([

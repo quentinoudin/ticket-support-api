@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { noNullCharacter, NULL_CHARACTER_MESSAGE } from "./common.js";
+
 export const ticketStatuses = ["OPEN", "IN_PROGRESS", "CLOSED"] as const;
 export const ticketPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
@@ -7,12 +9,14 @@ const titleSchema = z
   .string({ error: "Le titre est obligatoire" })
   .trim()
   .min(1, "Le titre est obligatoire")
-  .max(200, "Le titre ne peut pas dépasser 200 caractères");
+  .max(200, "Le titre ne peut pas dépasser 200 caractères")
+  .refine(noNullCharacter, NULL_CHARACTER_MESSAGE);
 
 const descriptionSchema = z
   .string({ error: "La description est obligatoire" })
   .trim()
-  .min(1, "La description est obligatoire");
+  .min(1, "La description est obligatoire")
+  .refine(noNullCharacter, NULL_CHARACTER_MESSAGE);
 
 const statusSchema = z.enum(ticketStatuses, {
   error: "Le statut doit être OPEN, IN_PROGRESS ou CLOSED",
