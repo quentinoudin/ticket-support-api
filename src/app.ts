@@ -1,7 +1,9 @@
 import express from "express";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
 
 import { env } from "./config/env.js";
+import { buildOpenApiDocument } from "./docs/openapi.js";
 import { prisma } from "./lib/prisma.js";
 import { requestContextMiddleware } from "./lib/request-context.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
@@ -27,6 +29,17 @@ app.get("/health", async (_request, response) => {
     response.status(503).json({ status: "error", database: "disconnected" });
   }
 });
+
+// Documentation publique, montée avant la limite globale : l'interface charge beaucoup de fichiers.
+const openApiDocument = buildOpenApiDocument();
+app.get("/openapi.json", (_request, response) => {
+  response.json(openApiDocument);
+});
+app.use(
+  "/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(openApiDocument, { customSiteTitle: "API de tickets de support", swaggerOptions: { persistAuthorization: true } }),
+);
 
 app.use(globalLimiter);
 app.use("/auth", authRouter);
