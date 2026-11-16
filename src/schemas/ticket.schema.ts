@@ -58,6 +58,13 @@ export const listTicketsSchema = z
     limit: z.coerce.number().int().positive().max(100).default(10),
     status: statusSchema.optional(),
     priority: prioritySchema.optional(),
+    // Tickets que l'assistant n'a pas su traiter et qui attendent un humain (escaladés et pas encore fermés).
+    needsHuman: z.stringbool({ error: "needsHuman doit être true ou false" }).optional(),
+    aiHandling: z
+      .enum(["NONE", "PENDING", "ANSWERED", "ESCALATED", "OFF_TOPIC"], {
+        error: "aiHandling doit être NONE, PENDING, ANSWERED, ESCALATED ou OFF_TOPIC",
+      })
+      .optional(),
     sortBy: z
       .enum(ticketSortFields, { error: `Le tri doit être l'un de : ${ticketSortFields.join(", ")}` })
       .default("createdAt"),

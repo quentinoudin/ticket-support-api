@@ -27,6 +27,30 @@ const envSchema = z.object({
 
   SUPER_ADMIN_EMAIL: z.string().optional(),
   SUPER_ADMIN_PASSWORD: z.string().optional(),
+
+  // --- Assistant IA (désactivé par défaut) ---
+  AI_ENABLED: z.stringbool().default(false),
+  // La clé vit uniquement ici : jamais dans le code, les logs ni la CI.
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.url().default("https://api.deepseek.com"),
+  AI_MODEL: z.string().min(1).default("deepseek-flash"),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  AI_MAX_TOKENS_TRIAGE: z.coerce.number().int().min(50).max(2000).default(300),
+  AI_MAX_TOKENS_REPLY: z.coerce.number().int().min(100).max(4000).default(700),
+  // Plafond de jetons par jour pour toute l'application : la clé est partagée.
+  AI_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(200_000),
+  AI_USER_DAILY_RUNS: z.coerce.number().int().positive().default(20),
+  AI_MAX_TURNS: z.coerce.number().int().min(1).max(10).default(3),
+  AI_OFFTOPIC_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.8),
+  AI_REPLY_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
+}).superRefine((config, context) => {
+  if (config.AI_ENABLED && !config.DEEPSEEK_API_KEY) {
+    context.addIssue({
+      code: "custom",
+      path: ["DEEPSEEK_API_KEY"],
+      message: "DEEPSEEK_API_KEY est obligatoire quand AI_ENABLED=true",
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);

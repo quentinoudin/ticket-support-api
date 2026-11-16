@@ -48,5 +48,12 @@ export const passwordResetLimiter = createLimiter({
   message: "Trop de demandes de réinitialisation, réessayez plus tard",
 });
 
+// Messages des tickets : chaque message d'un utilisateur peut déclencher un appel à l'IA payant.
+export const messageLimiter = createLimiter({
+  windowMs: 15 * MINUTE,
+  limit: 60,
+  message: "Trop de messages envoyés, réessayez dans quelques minutes",
+});
+
 // Autres routes d'authentification (refresh, acceptation d'invitation).
 export const authLimiter = createLimiter({ windowMs: 15 * MINUTE, limit: 20 });

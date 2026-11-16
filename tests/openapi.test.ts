@@ -30,6 +30,10 @@ const documentedOperations = [
   "put /tickets/{id}",
   "patch /tickets/{id}",
   "delete /tickets/{id}",
+  "get /tickets/{id}/messages",
+  "post /tickets/{id}/messages",
+  "post /tickets/{id}/feedback",
+  "get /ai/status",
   "get /audit-logs",
 ];
 

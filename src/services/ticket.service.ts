@@ -8,6 +8,7 @@ import type {
   ReplaceTicketInput,
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
+import { aiConfig } from "../ai/config.js";
 import { diffFields, recordAudit } from "./audit.service.js";
 import type { Actor } from "./user.service.js";
 
@@ -19,13 +20,24 @@ function visibleTo(actor: Actor): Prisma.TicketWhereInput {
 }
 
 export async function createTicket(actor: Actor, data: CreateTicketInput) {
-  const ticket = await prisma.ticket.create({ data: { ...data, createdById: actor.id } });
+  // Seuls les tickets créés par un USER passent par l'assistant IA. Le ticket et sa tâche sont créés
+  // ensemble, en une seule écriture : jamais l'un sans l'autre, et la réponse HTTP n'attend pas l'IA.
+  const aiEligible = aiConfig.enabled && actor.role === "USER";
+
+  const ticket = await prisma.ticket.create({
+    data: {
+      ...data,
+      createdById: actor.id,
+      requestedPriority: data.priority,
+      ...(aiEligible && { aiHandling: "PENDING" as const, aiJobs: { create: { type: "TRIAGE_AND_REPLY" as const } } }),
+    },
+  });
 
   await recordAudit({
     action: "TICKET_CREATED",
     targetType: "Ticket",
     targetId: ticket.id,
-    metadata: { status: ticket.status, priority: ticket.priority },
+    metadata: { status: ticket.status, priority: ticket.priority, aiQueued: aiEligible },
   });
 
   return ticket;
@@ -53,11 +65,15 @@ function ticketChanges(before: Ticket, after: Ticket): Prisma.InputJsonObject {
 }
 
 export async function listTickets(actor: Actor, filters: ListTicketsInput) {
-  const { page, limit, status, priority, sortBy, order } = filters;
+  const { page, limit, status, priority, sortBy, order, needsHuman, aiHandling } = filters;
+  const waitingForHuman: Prisma.TicketWhereInput = { aiHandling: "ESCALATED", status: { not: "CLOSED" } };
   const where: Prisma.TicketWhereInput = {
     ...visibleTo(actor),
     ...(status && { status }),
     ...(priority && { priority }),
+    ...(aiHandling && { aiHandling }),
+    ...(needsHuman === true && waitingForHuman),
+    ...(needsHuman === false && { NOT: waitingForHuman }),
   };
 
   const [tickets, total] = await prisma.$transaction([
@@ -84,9 +100,15 @@ export async function getTicketById(actor: Actor, id: string) {
   return ticket;
 }
 
+// Dès qu'un agent ou un admin change la priorité, l'assistant IA n'y touche plus jamais.
+// Seuls AGENT et au-dessus peuvent la modifier : un USER est refusé avant d'arriver ici.
+function lockPriorityIfChanged(before: Ticket, priority: Ticket["priority"] | undefined) {
+  return priority !== undefined && priority !== before.priority ? { priorityLockedByHuman: true } : {};
+}
+
 export async function replaceTicket(id: string, data: ReplaceTicketInput) {
   const before = await findTicketOrThrow(id);
-  const after = await prisma.ticket.update({ where: { id }, data });
+  const after = await prisma.ticket.update({ where: { id }, data: { ...data, ...lockPriorityIfChanged(before, data.priority) } });
 
   await recordAudit({
     action: "TICKET_REPLACED",
@@ -109,7 +131,7 @@ export async function updateTicket(actor: Actor, id: string, data: UpdateTicketI
   }
 
   const before = await findTicketOrThrow(id);
-  const after = await prisma.ticket.update({ where: { id }, data });
+  const after = await prisma.ticket.update({ where: { id }, data: { ...data, ...lockPriorityIfChanged(before, data.priority) } });
 
   await recordAudit({
     action: "TICKET_UPDATED",

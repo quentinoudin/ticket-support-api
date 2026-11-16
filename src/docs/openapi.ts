@@ -10,6 +10,7 @@ import {
   resetPasswordSchema,
 } from "../schemas/auth.schema.js";
 import { listAuditLogsSchema } from "../schemas/audit.schema.js";
+import { createMessageSchema, feedbackSchema, listMessagesSchema } from "../schemas/message.schema.js";
 import {
   createTicketSchema,
   listTicketsSchema,
@@ -166,6 +167,11 @@ export function buildOpenApiDocument() {
       { name: "Comptes", description: "Gestion des utilisateurs (Admin et Super Admin)" },
       { name: "Tickets" },
       { name: "Audit", description: "Journal des actions sensibles (Super Admin)" },
+      {
+        name: "Assistant IA",
+        description:
+          "Assistant de support (DeepSeek) : répond aux tickets informatiques, reclassifie la priorité et passe la main aux humains. Les textes des tickets sont envoyés à un fournisseur tiers : n'y mettez jamais de données sensibles.",
+      },
     ],
     components: {
       securitySchemes: {
@@ -221,8 +227,43 @@ export function buildOpenApiDocument() {
             status: { type: "string", enum: ["OPEN", "IN_PROGRESS", "CLOSED"] },
             priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "URGENT"] },
             createdById: { type: "string", format: "uuid", nullable: true },
+            requestedPriority: {
+              type: "string",
+              enum: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+              nullable: true,
+              description: "Priorité choisie par l'utilisateur, conservée quand l'assistant IA la reclasse.",
+            },
+            priorityLockedByHuman: { type: "boolean", description: "Vrai dès qu'un agent ou un admin a fixé la priorité : l'IA n'y touche plus." },
+            aiPriorityReason: { type: "string", nullable: true },
+            aiCategory: {
+              type: "string",
+              enum: ["HARDWARE", "SOFTWARE", "NETWORK", "ACCOUNT_ACCESS", "EMAIL", "PRINTING", "SECURITY", "OTHER"],
+              nullable: true,
+            },
+            aiHandling: {
+              type: "string",
+              enum: ["NONE", "PENDING", "ANSWERED", "ESCALATED", "OFF_TOPIC"],
+              description: "Où en est le traitement par l'assistant IA. ESCALATED signifie qu'un humain doit s'en occuper.",
+            },
+            aiEscalationReason: { type: "string", nullable: true },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        TicketMessage: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            ticketId: { type: "string", format: "uuid" },
+            sender: { type: "string", enum: ["USER", "STAFF", "AI"] },
+            content: { type: "string" },
+            authorId: {
+              type: "string",
+              format: "uuid",
+              nullable: true,
+              description: "Visible uniquement par l'équipe support (AGENT et au-dessus).",
+            },
+            createdAt: { type: "string", format: "date-time" },
           },
         },
         PublicUser: {
@@ -482,7 +523,8 @@ export function buildOpenApiDocument() {
         get: operation({
           tag: "Tickets",
           summary: "Lister les tickets",
-          description: "Un USER ne voit que ses propres tickets. Les autres rôles voient tout.",
+          description:
+            "Un USER ne voit que ses propres tickets. Les autres rôles voient tout. `needsHuman=true` liste les tickets que l'assistant IA n'a pas su traiter et qui attendent un humain (escaladés, pas encore fermés).",
           parameters: queryParameters(listTicketsSchema),
           success: { status: 200, description: "Liste paginée", schema: paginated(ref("Ticket")) },
           errors: [400],
@@ -522,6 +564,91 @@ export function buildOpenApiDocument() {
           parameters: [idParameter],
           success: { status: 204, description: "Ticket supprimé" },
           errors: [400, 403, 404],
+        }),
+      },
+
+      "/tickets/{id}/messages": {
+        get: operation({
+          tag: "Tickets",
+          summary: "Lire la conversation d'un ticket",
+          description: "Du plus ancien au plus récent. Mêmes règles de visibilité que le ticket.",
+          parameters: [idParameter, ...queryParameters(listMessagesSchema)],
+          success: { status: 200, description: "Liste paginée", schema: paginated(ref("TicketMessage")) },
+          errors: [400, 404],
+        }),
+        post: operation({
+          tag: "Tickets",
+          summary: "Écrire dans un ticket",
+          description:
+            "Un USER écrit dans ses propres tickets. Un AGENT ou au-dessus écrit comme équipe support. Un ticket fermé n'accepte plus de message de l'utilisateur (sauf s'il a été fermé comme hors sujet par l'assistant). Limité à 200 messages par ticket.",
+          parameters: [idParameter],
+          body: createMessageSchema,
+          success: { status: 201, description: "Message ajouté", schema: data(ref("TicketMessage")) },
+          errors: [400, 404, 409, 429],
+        }),
+      },
+
+      "/tickets/{id}/feedback": {
+        post: operation({
+          tag: "Tickets",
+          summary: "Dire si la réponse de l'assistant a réglé le problème",
+          description:
+            "Réservé à l'auteur du ticket, une seule fois, et seulement quand l'assistant a répondu (`aiHandling=ANSWERED`). `resolved: true` ferme le ticket ; `resolved: false` le passe à l'équipe support (`aiHandling=ESCALATED`).",
+          parameters: [idParameter],
+          body: feedbackSchema,
+          success: { status: 200, description: "Avis enregistré", schema: data(ref("Ticket")) },
+          errors: [400, 403, 404, 409, 429],
+        }),
+      },
+
+      "/ai/status": {
+        get: operation({
+          tag: "Assistant IA",
+          summary: "État de l'assistant IA",
+          description:
+            "Réservé aux Admin et Super Admin. Indique si l'assistant est actif, les jetons consommés aujourd'hui par rapport au budget, les appels du jour par résultat, la file d'attente et le nombre de tickets qui attendent un humain. Ne renvoie jamais la clé d'API.",
+          success: {
+            status: 200,
+            description: "État de l'assistant",
+            schema: data({
+              type: "object",
+              properties: {
+                enabled: { type: "boolean" },
+                keyConfigured: { type: "boolean" },
+                model: { type: "string" },
+                budget: {
+                  type: "object",
+                  properties: {
+                    dailyTokenBudget: { type: "integer" },
+                    tokensUsedToday: { type: "integer" },
+                    tokensRemaining: { type: "integer" },
+                    userDailyRuns: { type: "integer" },
+                  },
+                },
+                limits: {
+                  type: "object",
+                  properties: {
+                    maxTurns: { type: "integer" },
+                    offTopicMinConfidence: { type: "number" },
+                    replyMinConfidence: { type: "number" },
+                  },
+                },
+                runsToday: { type: "object", additionalProperties: { type: "integer" } },
+                queue: {
+                  type: "object",
+                  properties: { queued: { type: "integer" }, running: { type: "integer" }, failed: { type: "integer" } },
+                },
+                tickets: {
+                  type: "object",
+                  properties: {
+                    waitingForHuman: { type: "integer" },
+                    byAiHandling: { type: "object", additionalProperties: { type: "integer" } },
+                  },
+                },
+              },
+            }),
+          },
+          errors: [403],
         }),
       },
 

@@ -58,6 +58,7 @@ model User {
   refreshTokens RefreshToken[]
   oneTimeTokens OneTimeToken[]
   tickets       Ticket[]
+  messages      TicketMessage[]
 
   @@index([role])
   @@index([status])
@@ -113,6 +114,59 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// --- Assistant IA ---
+
+// Où en est le traitement du ticket par l'assistant. Indépendant du statut OPEN/IN_PROGRESS/CLOSED.
+enum AiHandling {
+  NONE
+  PENDING
+  ANSWERED
+  ESCALATED
+  OFF_TOPIC
+}
+
+enum AiCategory {
+  HARDWARE
+  SOFTWARE
+  NETWORK
+  ACCOUNT_ACCESS
+  EMAIL
+  PRINTING
+  SECURITY
+  OTHER
+}
+
+enum MessageSender {
+  USER
+  STAFF
+  AI
+}
+
+enum AiRunKind {
+  TRIAGE
+  REPLY
+}
+
+enum AiRunOutcome {
+  OK
+  INVALID_OUTPUT
+  ERROR
+  TIMEOUT
+  BUDGET
+}
+
+enum AiJobType {
+  TRIAGE_AND_REPLY
+  FOLLOW_UP
+}
+
+enum AiJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
 model Ticket {
   id          String         @id @default(uuid())
   title       String         @db.VarChar(200)
@@ -123,10 +177,77 @@ model Ticket {
   updatedAt   DateTime       @updatedAt
   createdById String?
 
-  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  // Priorité choisie par l'utilisateur, conservée quand l'IA la reclasse.
+  requestedPriority     TicketPriority?
+  // Une fois fixée à la main par un agent ou un admin, l'IA n'y touche plus.
+  priorityLockedByHuman Boolean         @default(false)
+  aiPriorityReason      String?         @db.VarChar(200)
+  aiCategory            AiCategory?
+  aiHandling            AiHandling      @default(NONE)
+  aiEscalationReason    String?         @db.VarChar(60)
+
+  createdBy User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages  TicketMessage[]
+  aiJobs    AiJob[]
 
   @@index([createdById])
   @@index([status])
   @@index([priority])
   @@index([createdAt])
+  @@index([aiHandling])
+}
+
+model TicketMessage {
+  id        String        @id @default(uuid())
+  ticketId  String
+  sender    MessageSender
+  authorId  String?
+  content   String        @db.Text
+  createdAt DateTime      @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+}
+
+// Journal de chaque appel à l'IA. Jamais le texte des prompts ni des réponses : seulement
+// de quoi mesurer le coût et les pannes. Sans clé étrangère, il survit à la suppression d'un ticket.
+model AiRun {
+  id               String       @id @default(uuid())
+  kind             AiRunKind
+  model            String
+  promptVersion    String
+  promptTokens     Int          @default(0)
+  completionTokens Int          @default(0)
+  latencyMs        Int          @default(0)
+  outcome          AiRunOutcome
+  ticketId         String?
+  userId           String?
+  createdAt        DateTime     @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([ticketId])
+}
+
+// File de tâches de l'assistant, traitée par le serveur.
+model AiJob {
+  id        String      @id @default(uuid())
+  type      AiJobType
+  ticketId  String
+  messageId String?
+  status    AiJobStatus @default(QUEUED)
+  attempts  Int         @default(0)
+  runAfter  DateTime    @default(now())
+  lockedAt  DateTime?
+  // Court et sans donnée du ticket : seulement un code d'erreur.
+  lastError String?     @db.VarChar(120)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAfter])
+  @@index([ticketId])
 }
