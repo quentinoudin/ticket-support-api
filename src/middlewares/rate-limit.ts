@@ -1,13 +1,52 @@
+import type { RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
 
-// Désactivé pendant les tests pour ne pas les rendre dépendants du nombre de requêtes.
-const skip = () => process.env.NODE_ENV === "test";
+import { AppError } from "../errors/app-error.js";
 
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  skip,
-  message: { error: "Trop de tentatives, réessayez plus tard" },
+interface LimiterOptions {
+  windowMs: number;
+  limit: number;
+  message?: string;
+  // Désactivé par défaut pendant les tests, pour ne pas les rendre dépendants du nombre de requêtes.
+  skip?: () => boolean;
+}
+
+const MINUTE = 60 * 1000;
+const skipInTest = () => process.env.NODE_ENV === "test";
+
+export function createLimiter({
+  windowMs,
+  limit,
+  message = "Trop de requêtes, réessayez plus tard",
+  skip = skipInTest,
+}: LimiterOptions): RequestHandler {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    skip,
+    // Passe par le gestionnaire d'erreurs pour garder le format { error, code }.
+    handler: (_request, _response, next) => next(new AppError(message, 429)),
+  });
+}
+
+// Filet de sécurité sur toute l'API (par adresse IP).
+export const globalLimiter = createLimiter({ windowMs: 15 * MINUTE, limit: 300 });
+
+// Connexion : le plus surveillé, c'est la cible des attaques par force brute.
+export const loginLimiter = createLimiter({
+  windowMs: 15 * MINUTE,
+  limit: 10,
+  message: "Trop de tentatives de connexion, réessayez dans quelques minutes",
 });
+
+// Mot de passe oublié / réinitialisation : évite le spam d'emails et le devinage de jetons.
+export const passwordResetLimiter = createLimiter({
+  windowMs: 15 * MINUTE,
+  limit: 5,
+  message: "Trop de demandes de réinitialisation, réessayez plus tard",
+});
+
+// Autres routes d'authentification (refresh, acceptation d'invitation).
+export const authLimiter = createLimiter({ windowMs: 15 * MINUTE, limit: 20 });

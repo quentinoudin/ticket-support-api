@@ -49,6 +49,10 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  // Verrouillage temporaire après trop d'échecs de connexion consécutifs.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
   createdBy     User?          @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers  User[]         @relation("UserCreatedBy")
   refreshTokens RefreshToken[]
@@ -87,6 +91,26 @@ model OneTimeToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
+}
+
+// Journal d'audit : pas de clé étrangère vers User, pour que l'historique survive
+// à la suppression d'un compte.
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  actorId    String?
+  actorEmail String?
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
 
 model Ticket {

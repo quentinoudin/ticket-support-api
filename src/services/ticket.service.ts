@@ -1,6 +1,6 @@
 import { hasRoleAtLeast } from "../auth/permissions.js";
 import { AppError } from "../errors/app-error.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import type { Prisma, Ticket } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import type {
   CreateTicketInput,
@@ -8,6 +8,7 @@ import type {
   ReplaceTicketInput,
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
+import { diffFields, recordAudit } from "./audit.service.js";
 import type { Actor } from "./user.service.js";
 
 const NOT_FOUND = "Ticket introuvable";
@@ -18,11 +19,41 @@ function visibleTo(actor: Actor): Prisma.TicketWhereInput {
 }
 
 export async function createTicket(actor: Actor, data: CreateTicketInput) {
-  return prisma.ticket.create({ data: { ...data, createdById: actor.id } });
+  const ticket = await prisma.ticket.create({ data: { ...data, createdById: actor.id } });
+
+  await recordAudit({
+    action: "TICKET_CREATED",
+    targetType: "Ticket",
+    targetId: ticket.id,
+    metadata: { status: ticket.status, priority: ticket.priority },
+  });
+
+  return ticket;
+}
+
+async function findTicketOrThrow(id: string) {
+  const ticket = await prisma.ticket.findUnique({ where: { id } });
+
+  if (!ticket) {
+    throw new AppError(NOT_FOUND, 404);
+  }
+
+  return ticket;
+}
+
+// Statut et priorité : valeurs avant/après. Titre et description : seulement leur nom,
+// pour ne pas dupliquer du contenu libre dans le journal.
+function ticketChanges(before: Ticket, after: Ticket): Prisma.InputJsonObject {
+  const edited = (["title", "description"] as const).filter((field) => before[field] !== after[field]);
+
+  return {
+    ...diffFields(before, after, ["status", "priority"]),
+    ...(edited.length > 0 && { editedFields: edited }),
+  };
 }
 
 export async function listTickets(actor: Actor, filters: ListTicketsInput) {
-  const { page, limit, status, priority } = filters;
+  const { page, limit, status, priority, sortBy, order } = filters;
   const where: Prisma.TicketWhereInput = {
     ...visibleTo(actor),
     ...(status && { status }),
@@ -32,7 +63,8 @@ export async function listTickets(actor: Actor, filters: ListTicketsInput) {
   const [tickets, total] = await prisma.$transaction([
     prisma.ticket.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      // L'identifiant départage les égalités pour que la pagination reste stable.
+      orderBy: [{ [sortBy]: order }, { id: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -53,7 +85,17 @@ export async function getTicketById(actor: Actor, id: string) {
 }
 
 export async function replaceTicket(id: string, data: ReplaceTicketInput) {
-  return prisma.ticket.update({ where: { id }, data });
+  const before = await findTicketOrThrow(id);
+  const after = await prisma.ticket.update({ where: { id }, data });
+
+  await recordAudit({
+    action: "TICKET_REPLACED",
+    targetType: "Ticket",
+    targetId: id,
+    metadata: ticketChanges(before, after),
+  });
+
+  return after;
 }
 
 export async function updateTicket(actor: Actor, id: string, data: UpdateTicketInput) {
@@ -66,9 +108,27 @@ export async function updateTicket(actor: Actor, id: string, data: UpdateTicketI
     await getTicketById(actor, id);
   }
 
-  return prisma.ticket.update({ where: { id }, data });
+  const before = await findTicketOrThrow(id);
+  const after = await prisma.ticket.update({ where: { id }, data });
+
+  await recordAudit({
+    action: "TICKET_UPDATED",
+    targetType: "Ticket",
+    targetId: id,
+    metadata: ticketChanges(before, after),
+  });
+
+  return after;
 }
 
 export async function deleteTicket(id: string) {
+  const ticket = await findTicketOrThrow(id);
   await prisma.ticket.delete({ where: { id } });
+
+  await recordAudit({
+    action: "TICKET_DELETED",
+    targetType: "Ticket",
+    targetId: id,
+    metadata: { title: ticket.title, status: ticket.status },
+  });
 }

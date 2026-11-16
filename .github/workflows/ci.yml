@@ -1,0 +1,66 @@
+name: CI
+
+# Lance la vérification des types, les tests et la compilation à chaque push et chaque pull request.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Types, tests et build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ticket_user
+          POSTGRES_PASSWORD: ticket_password
+          POSTGRES_DB: ticket_support_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ticket_user -d ticket_support_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Valeurs réservées à la CI : base jetable et secret qui ne protège rien.
+      DATABASE_URL: postgresql://ticket_user:ticket_password@localhost:5432/ticket_support_test?schema=public
+      DATABASE_URL_TEST: postgresql://ticket_user:ticket_password@localhost:5432/ticket_support_test?schema=public
+      JWT_ACCESS_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      APP_URL: http://localhost:3000
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Générer le client Prisma
+        run: npx prisma generate
+
+      - name: Vérifier les types
+        run: npm run typecheck
+
+      - name: Lancer les tests
+        run: npm test
+
+      - name: Compiler
+        run: npm run build

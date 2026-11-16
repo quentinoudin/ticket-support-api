@@ -8,6 +8,7 @@ import type {
   LoginInput,
   ResetPasswordInput,
 } from "../schemas/auth.schema.js";
+import { recordAudit } from "./audit.service.js";
 import { sendPasswordResetEmail } from "./mail.service.js";
 import {
   consumeOneTimeToken,
@@ -26,21 +27,82 @@ export function toPublicUser(user: { id: string; email: string; role: string; st
   return { id: user.id, email: user.email, role: user.role, status: user.status };
 }
 
+// Incrémente le compteur d'échecs ; à la limite, verrouille le compte et remet le compteur à zéro.
+async function registerFailedLogin(user: { id: string; email: string }) {
+  const { failedLoginCount } = await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginCount: { increment: 1 } },
+    select: { failedLoginCount: true },
+  });
+
+  if (failedLoginCount >= env.LOGIN_MAX_ATTEMPTS) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginCount: 0,
+        lockedUntil: new Date(Date.now() + env.LOGIN_LOCK_MINUTES * 60 * 1000),
+      },
+    });
+
+    await recordAudit({
+      action: "ACCOUNT_LOCKED",
+      actor: { email: user.email },
+      targetType: "User",
+      targetId: user.id,
+      metadata: { lockMinutes: env.LOGIN_LOCK_MINUTES },
+    });
+  }
+}
+
 export async function login({ email, password }: LoginInput) {
   const user = await prisma.user.findUnique({ where: { email } });
+
+  // Un compte verrouillé refuse toute tentative, même avec le bon mot de passe.
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    throw new AppError("Compte temporairement verrouillé suite à trop d'échecs, réessayez plus tard", 429);
+  }
 
   // Même réponse pour un email inconnu, un compte invité ou un mauvais mot de passe.
   const passwordMatches = await verifyPassword(password, user?.passwordHash ?? null);
 
   if (!user || !passwordMatches) {
+    // L'email tenté est conservé (jamais le mot de passe) pour repérer les attaques ciblées.
+    await recordAudit({
+      action: "LOGIN_FAILED",
+      actor: { email },
+      ...(user && { targetType: "User" as const, targetId: user.id }),
+    });
+
+    if (user) {
+      await registerFailedLogin(user);
+    }
+
     throw new AppError(INVALID_CREDENTIALS, 401);
   }
 
   if (user.status === "DISABLED") {
+    await recordAudit({
+      action: "LOGIN_FAILED",
+      actor: { id: user.id, email: user.email },
+      targetType: "User",
+      targetId: user.id,
+      metadata: { reason: "account_disabled" },
+    });
+
     throw new AppError("Ce compte est désactivé", 403);
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
+  });
+
+  await recordAudit({
+    action: "LOGIN_SUCCESS",
+    actor: { id: user.id, email: user.email },
+    targetType: "User",
+    targetId: user.id,
+  });
 
   const refresh = await issueRefreshToken(user.id);
 
@@ -63,6 +125,13 @@ export async function acceptInvite({ token, password }: AcceptInviteInput) {
     data: { passwordHash: await hashPassword(password), status: "ACTIVE" },
   });
 
+  await recordAudit({
+    action: "INVITE_ACCEPTED",
+    actor: { id: activated.id, email: activated.email },
+    targetType: "User",
+    targetId: activated.id,
+  });
+
   return toPublicUser(activated);
 }
 
@@ -75,6 +144,13 @@ export async function forgotPassword({ email }: ForgotPasswordInput) {
   }
 
   const token = await issueOneTimeToken(user.id, "PASSWORD_RESET", env.RESET_TTL_MINUTES * 60 * 1000);
+
+  await recordAudit({
+    action: "PASSWORD_RESET_REQUESTED",
+    actor: { id: user.id, email: user.email },
+    targetType: "User",
+    targetId: user.id,
+  });
 
   try {
     await sendPasswordResetEmail(user.email, token);
@@ -90,13 +166,24 @@ export async function resetPassword({ token, password }: ResetPasswordInput) {
     throw new AppError("Lien invalide ou expiré", 400);
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
+  // Une réinitialisation réussie lève aussi un éventuel verrouillage.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(password), failedLoginCount: 0, lockedUntil: null },
+  });
 
   // Les sessions ouvertes et les autres liens de réinitialisation ne doivent plus fonctionner.
   await revokeAllRefreshTokens(user.id);
   await prisma.oneTimeToken.updateMany({
     where: { userId: user.id, type: "PASSWORD_RESET", usedAt: null },
     data: { usedAt: new Date() },
+  });
+
+  await recordAudit({
+    action: "PASSWORD_RESET_COMPLETED",
+    actor: { id: user.id, email: user.email },
+    targetType: "User",
+    targetId: user.id,
   });
 }
 
