@@ -1,6 +1,0 @@
-
-=== VULN-008 : champs internes de l'IA visibles par l'utilisateur final ===
-> GET /tickets/2336183f-14b2-4f0f-beca-a0abe7fba66d   (rôle USER)
-< 200
-Champs reçus : id, title, description, status, priority, createdAt, updatedAt, createdById, requestedPriority, priorityLockedByHuman, aiPriorityReason, aiCategory, aiHandling, aiEscalationReason
-Champs internes exposés : createdById, requestedPriority, priorityLockedByHuman, aiPriorityReason, aiCategory, aiHandling, aiEscalationReason
