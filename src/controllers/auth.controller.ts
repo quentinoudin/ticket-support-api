@@ -24,7 +24,7 @@ export async function acceptInvite(request: Request, response: Response): Promis
 
 export async function forgotPassword(request: Request, response: Response): Promise<void> {
   const input = forgotPasswordSchema.parse(request.body);
-  await authService.forgotPassword(input);
+  authService.forgotPassword(input);
   response.status(200).json({
     message: "Si un compte actif existe pour cet email, un lien de réinitialisation vient d'être envoyé.",
   });

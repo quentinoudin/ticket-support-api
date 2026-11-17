@@ -54,7 +54,10 @@ describe("création", () => {
     const response = await request(app).post("/tickets").set(auth(ownerToken)).send(body);
 
     expect(response.status).toBe(201);
-    expect(response.body.data).toMatchObject({ status: "OPEN", priority: "HIGH", createdById: owner.id });
+    expect(response.body.data).toMatchObject({ status: "OPEN", priority: "HIGH" });
+    // L'identifiant de l'auteur est interne : visible en base, pas dans la réponse destinée à un USER.
+    expect(response.body.data.createdById).toBeUndefined();
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: response.body.data.id } })).createdById).toBe(owner.id);
   });
 
   it("refuse un createdById fourni par le client", async () => {

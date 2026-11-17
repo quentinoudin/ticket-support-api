@@ -1,4 +1,4 @@
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
 
 import { AppError } from "../errors/app-error.js";
@@ -9,6 +9,8 @@ interface LimiterOptions {
   message?: string;
   // Désactivé par défaut pendant les tests, pour ne pas les rendre dépendants du nombre de requêtes.
   skip?: () => boolean;
+  // Clé de comptage ; par défaut l'adresse IP.
+  keyGenerator?: (request: Request) => string;
 }
 
 const MINUTE = 60 * 1000;
@@ -19,6 +21,7 @@ export function createLimiter({
   limit,
   message = "Trop de requêtes, réessayez plus tard",
   skip = skipInTest,
+  keyGenerator,
 }: LimiterOptions): RequestHandler {
   return rateLimit({
     windowMs,
@@ -26,6 +29,7 @@ export function createLimiter({
     standardHeaders: "draft-7",
     legacyHeaders: false,
     skip,
+    ...(keyGenerator && { keyGenerator }),
     // Passe par le gestionnaire d'erreurs pour garder le format { error, code }.
     handler: (_request, _response, next) => next(new AppError(message, 429)),
   });
@@ -57,3 +61,12 @@ export const messageLimiter = createLimiter({
 
 // Autres routes d'authentification (refresh, acceptation d'invitation).
 export const authLimiter = createLimiter({ windowMs: 15 * MINUTE, limit: 20 });
+
+// Création de tickets : chacun peut déclencher un appel payant à l'IA et occupe de la place en base.
+// Comptage par utilisateur connecté (à placer après `authenticate`).
+export const ticketCreateLimiter = createLimiter({
+  windowMs: 15 * MINUTE,
+  limit: 30,
+  message: "Trop de tickets créés, réessayez dans quelques minutes",
+  keyGenerator: (request) => request.user?.id ?? "anonyme",
+});

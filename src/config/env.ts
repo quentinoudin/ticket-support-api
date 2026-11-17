@@ -17,6 +17,8 @@ const envSchema = z.object({
   LOGIN_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
   // Nombre de proxys de confiance devant l'API (0 = aucun). Nécessaire pour lire la vraie IP du client.
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Documentation publique /docs et /openapi.json : désactivée par défaut en production.
+  DOCS_ENABLED: z.stringbool().default(process.env.NODE_ENV !== "production"),
 
   SMTP_HOST: z.string().default("localhost"),
   SMTP_PORT: z.coerce.number().int().positive().default(1026),

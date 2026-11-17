@@ -31,16 +31,19 @@ app.get("/health", async (_request, response) => {
   }
 });
 
-// Documentation publique, montée avant la limite globale : l'interface charge beaucoup de fichiers.
-const openApiDocument = buildOpenApiDocument();
-app.get("/openapi.json", (_request, response) => {
-  response.json(openApiDocument);
-});
-app.use(
-  "/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(openApiDocument, { customSiteTitle: "API de tickets de support", swaggerOptions: { persistAuthorization: true } }),
-);
+// Documentation, montée avant la limite globale : l'interface charge beaucoup de fichiers.
+// Désactivée par défaut en production (DOCS_ENABLED=true pour la publier).
+if (env.DOCS_ENABLED) {
+  const openApiDocument = buildOpenApiDocument();
+  app.get("/openapi.json", (_request, response) => {
+    response.json(openApiDocument);
+  });
+  app.use(
+    "/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(openApiDocument, { customSiteTitle: "API de tickets de support", swaggerOptions: { persistAuthorization: true } }),
+  );
+}
 
 app.use(globalLimiter);
 app.use("/auth", authRouter);

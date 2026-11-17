@@ -265,11 +265,9 @@ describe("POST /tickets/:id/feedback", () => {
     const response = await request(app).post(`/tickets/${ticketId}/feedback`).set(auth(ownerToken)).send({ resolved: false });
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({
-      status: "OPEN",
-      aiHandling: "ESCALATED",
-      aiEscalationReason: "USER_NOT_SATISFIED",
-    });
+    expect(response.body.data).toMatchObject({ status: "OPEN", aiHandling: "ESCALATED" });
+    expect(response.body.data.aiEscalationReason).toBeUndefined();
+    expect(await ticketRow(ticketId)).toMatchObject({ aiEscalationReason: "USER_NOT_SATISFIED" });
     expect((await messagesOf(ticketId)).at(-1)!.content).toBe(ESCALATION_NOTICE);
     expect((await auditOf("TICKET_FEEDBACK_SUBMITTED"))[0]!.metadata).toEqual({ resolved: false });
   });

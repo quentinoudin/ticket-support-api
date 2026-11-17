@@ -128,7 +128,14 @@ async function closeOffTopic(ticket: TicketForAi, triage: TriageOutput): Promise
 
 // Reclassifie la priorité, sauf si un humain l'a déjà fixée. La priorité demandée par l'utilisateur
 // reste dans requestedPriority, et tout changement est journalisé.
-async function applyTriage(ticket: TicketForAi, triage: TriageOutput): Promise<void> {
+// L'IA lit du texte écrit par l'utilisateur : elle ne peut pas, à elle seule, classer un ticket URGENT.
+// Un ticket qu'elle juge urgent passe en HIGH et l'équipe support décide de l'escalade (voir audit).
+function boundedPriority(proposed: TicketPriority): TicketPriority {
+  return proposed === "URGENT" ? "HIGH" : proposed;
+}
+
+async function applyTriage(ticket: TicketForAi, rawTriage: TriageOutput): Promise<void> {
+  const triage = { ...rawTriage, priority: boundedPriority(rawTriage.priority) };
   const changePriority = !ticket.priorityLockedByHuman && triage.priority !== ticket.priority;
 
   await prisma.ticket.update({
@@ -149,6 +156,7 @@ async function applyTriage(ticket: TicketForAi, triage: TriageOutput): Promise<v
       metadata: {
         priority: { from: ticket.priority, to: triage.priority },
         requestedPriority: ticket.requestedPriority,
+        proposedByModel: rawTriage.priority,
         reason: triage.priorityReason,
         confidence: triage.confidence,
       },

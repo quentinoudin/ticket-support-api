@@ -30,16 +30,18 @@ describe("emailSchema", () => {
 });
 
 describe("passwordSchema", () => {
-  it("accepte un mot de passe de 10 à 72 caractères avec une lettre et un chiffre", () => {
-    expect(passwordSchema.safeParse("Motdepasse1").success).toBe(true);
-    expect(passwordSchema.safeParse("a1".repeat(36)).success).toBe(true);
+  it("accepte un mot de passe de 12 à 72 caractères avec une lettre et un chiffre", () => {
+    expect(passwordSchema.safeParse("Zebre-Bleu-42x").success).toBe(true);
+    expect(passwordSchema.safeParse("ab1".repeat(24)).success).toBe(true);
   });
 
   it.each([
-    ["trop court", "Court1abc"],
+    ["trop court", "Court1abcde"],
+    ["trop courant (Password1234)", "Password1234"],
+    ["trop courant (Azerty123456)", "Azerty123456"],
     ["sans chiffre", "MotDePasseSansChiffre"],
     ["sans lettre", "1234567890123"],
-    ["trop long (bcrypt tronque au-delà de 72)", "a1".repeat(37)],
+    ["trop long (bcrypt tronque au-delà de 72)", "ab1".repeat(25)],
   ])("refuse un mot de passe %s", (_label, value) => {
     expect(passwordSchema.safeParse(value).success).toBe(false);
   });

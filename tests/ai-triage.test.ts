@@ -117,13 +117,14 @@ describe("ticket du périmètre", () => {
 
     await runJobs();
 
-    expect(await ticketRow(ticket.id)).toMatchObject({ priority: "URGENT", requestedPriority: "LOW" });
+    // Plafond : l'IA ne classe jamais seule un ticket URGENT, elle le passe en HIGH.
+    expect(await ticketRow(ticket.id)).toMatchObject({ priority: "HIGH", requestedPriority: "LOW" });
   });
 
   it("ne journalise rien quand la priorité reste la même", async () => {
     const { ownerToken } = await setup();
-    installFakeLlm(triageJson({ priority: "URGENT" }), replyJson());
-    await createTicket(ownerToken);
+    installFakeLlm(triageJson({ priority: "HIGH" }), replyJson());
+    await createTicket(ownerToken, { priority: "HIGH" });
 
     await runJobs();
 

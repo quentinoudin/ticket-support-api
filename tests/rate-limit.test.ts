@@ -1,4 +1,5 @@
 import express from "express";
+import { settleBackgroundWork } from "../src/services/auth.service.js";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -46,76 +47,84 @@ describe("limiteur de requêtes", () => {
   });
 });
 
-describe("verrouillage du compte après des échecs de connexion", () => {
+describe("blocage des échecs de connexion par (email, adresse IP)", () => {
   const wrong = { email: "agent@test.local", password: "Mauvais123456" };
 
-  async function failTimes(count: number) {
+  async function failTimes(count: number, ip?: string, body: object = wrong) {
     for (let i = 0; i < count; i++) {
-      await request(app).post("/auth/login").send(wrong);
+      const call = request(app).post("/auth/login");
+      await (ip ? call.set("X-Forwarded-For", ip) : call).send(body);
     }
   }
 
-  it("verrouille le compte après LOGIN_MAX_ATTEMPTS échecs, même avec le bon mot de passe", async () => {
+  async function withProxy<T>(run: () => Promise<T>): Promise<T> {
+    app.set("trust proxy", 1);
+    try {
+      return await run();
+    } finally {
+      app.set("trust proxy", 0);
+    }
+  }
+
+  it("bloque après LOGIN_MAX_ATTEMPTS échecs depuis la même adresse, même avec le bon mot de passe", async () => {
     await createUser({ email: "agent@test.local", role: "AGENT" });
 
     await failTimes(env.LOGIN_MAX_ATTEMPTS);
-    const locked = await request(app)
-      .post("/auth/login")
-      .send({ email: "agent@test.local", password: TEST_PASSWORD });
+    const locked = await request(app).post("/auth/login").send({ email: "agent@test.local", password: TEST_PASSWORD });
 
     expect(locked.status).toBe(429);
     expect(locked.body.code).toBe("RATE_LIMITED");
   });
 
-  it("ne verrouille pas avant la limite et remet le compteur à zéro après un succès", async () => {
+  it("ne bloque PAS le propriétaire qui se connecte depuis une autre adresse (VULN-003)", async () => {
+    await createUser({ email: "agent@test.local", role: "AGENT" });
+
+    await withProxy(async () => {
+      await failTimes(env.LOGIN_MAX_ATTEMPTS, "203.0.113.5");
+      const owner = await request(app)
+        .post("/auth/login")
+        .set("X-Forwarded-For", "198.51.100.7")
+        .send({ email: "agent@test.local", password: TEST_PASSWORD });
+
+      expect(owner.status).toBe(200);
+    });
+  });
+
+  it("répond de la même façon pour un compte existant et pour un email inconnu (VULN-004)", async () => {
+    await createUser({ email: "agent@test.local", role: "AGENT" });
+    const known: number[] = [];
+    const unknown: number[] = [];
+
+    for (let i = 0; i < env.LOGIN_MAX_ATTEMPTS + 2; i++) {
+      known.push((await request(app).post("/auth/login").send(wrong)).status);
+      unknown.push((await request(app).post("/auth/login").send({ ...wrong, email: "inconnu@test.local" })).status);
+    }
+
+    expect(unknown).toEqual(known);
+    expect(known.at(-1)).toBe(429);
+  });
+
+  it("ne bloque pas avant la limite et remet le compteur à zéro après un succès", async () => {
     await createUser({ email: "agent@test.local", role: "AGENT" });
 
     await failTimes(env.LOGIN_MAX_ATTEMPTS - 1);
-    const success = await request(app)
-      .post("/auth/login")
-      .send({ email: "agent@test.local", password: TEST_PASSWORD });
+    const success = await request(app).post("/auth/login").send({ email: "agent@test.local", password: TEST_PASSWORD });
     await failTimes(env.LOGIN_MAX_ATTEMPTS - 1);
-    const stillOk = await request(app)
-      .post("/auth/login")
-      .send({ email: "agent@test.local", password: TEST_PASSWORD });
+    const stillOk = await request(app).post("/auth/login").send({ email: "agent@test.local", password: TEST_PASSWORD });
 
     expect(success.status).toBe(200);
     expect(stillOk.status).toBe(200);
   });
 
-  it("se déverrouille à l'expiration du délai", async () => {
-    const user = await createUser({ email: "agent@test.local", role: "AGENT" });
-    await failTimes(env.LOGIN_MAX_ATTEMPTS);
-    await prisma.user.update({ where: { id: user.id }, data: { lockedUntil: new Date(Date.now() - 1000) } });
-
-    const response = await request(app)
-      .post("/auth/login")
-      .send({ email: "agent@test.local", password: TEST_PASSWORD });
-
-    expect(response.status).toBe(200);
-  });
-
-  it("n'a aucun effet sur un email inconnu, qui répond toujours 401", async () => {
-    const results = [];
-    for (let i = 0; i < env.LOGIN_MAX_ATTEMPTS + 2; i++) {
-      results.push((await request(app).post("/auth/login").send({ email: "inconnu@test.local", password: "x" })).status);
-    }
-
-    expect(new Set(results)).toEqual(new Set([401]));
-  });
-
-  it("une réinitialisation de mot de passe lève le verrouillage", async () => {
+  it("une réinitialisation de mot de passe lève le blocage", async () => {
     const emails = await captureEmails();
     await createUser({ email: "agent@test.local", role: "AGENT" });
     await failTimes(env.LOGIN_MAX_ATTEMPTS);
     await request(app).post("/auth/forgot-password").send({ email: "agent@test.local" });
+    await settleBackgroundWork();
 
-    await request(app)
-      .post("/auth/reset-password")
-      .send({ token: extractToken(emails[0]), password: "NouveauMdp2026" });
-    const login = await request(app)
-      .post("/auth/login")
-      .send({ email: "agent@test.local", password: "NouveauMdp2026" });
+    await request(app).post("/auth/reset-password").send({ token: extractToken(emails[0]), password: "NouveauMdp2026" });
+    const login = await request(app).post("/auth/login").send({ email: "agent@test.local", password: "NouveauMdp2026" });
 
     expect(login.status).toBe(200);
   });

@@ -10,10 +10,12 @@ import { prisma } from "../lib/prisma.js";
 export interface AccessTokenPayload {
   sub: string;
   role: UserRole;
+  // Identifiant de la session (famille de jetons de rafraîchissement) à laquelle ce jeton est lié.
+  sid: string;
 }
 
-export function signAccessToken(user: { id: string; role: UserRole }): string {
-  return jwt.sign({ role: user.role }, env.JWT_ACCESS_SECRET, {
+export function signAccessToken(user: { id: string; role: UserRole }, sessionId: string): string {
+  return jwt.sign({ role: user.role, sid: sessionId }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
     expiresIn: env.JWT_ACCESS_TTL as SignOptions["expiresIn"],
     algorithm: "HS256",
@@ -24,11 +26,11 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
   try {
     const payload = jwt.verify(token, env.JWT_ACCESS_SECRET, { algorithms: ["HS256"] });
 
-    if (typeof payload === "string" || typeof payload.sub !== "string") {
+    if (typeof payload === "string" || typeof payload.sub !== "string" || typeof payload.sid !== "string") {
       throw new Error("Payload invalide");
     }
 
-    return { sub: payload.sub, role: payload.role as UserRole };
+    return { sub: payload.sub, role: payload.role as UserRole, sid: payload.sid };
   } catch {
     throw new AppError("Jeton d'accès invalide ou expiré", 401);
   }
@@ -52,7 +54,18 @@ export async function issueRefreshToken(userId: string, familyId: string = rando
     data: { userId, familyId, tokenHash: hashToken(token), expiresAt },
   });
 
-  return { token, id: record.id };
+  return { token, id: record.id, familyId };
+}
+
+// Une session est vivante tant que sa famille a un jeton de rafraîchissement ni révoqué ni expiré.
+// Déconnexion, réinitialisation du mot de passe, désactivation : tout coupe aussi les jetons d'accès.
+export async function isSessionActive(sessionId: string): Promise<boolean> {
+  const alive = await prisma.refreshToken.findFirst({
+    where: { familyId: sessionId, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+
+  return alive !== null;
 }
 
 // Émet un jeton à usage unique et invalide les précédents du même type pour cet utilisateur.

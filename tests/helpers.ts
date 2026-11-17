@@ -1,8 +1,9 @@
 import type { UserRole, UserStatus } from "../src/generated/prisma/client.js";
 import { hashPassword } from "../src/lib/password.js";
 import { prisma } from "../src/lib/prisma.js";
+import { resetThrottle } from "../src/services/login-throttle.js";
 
-export const TEST_PASSWORD = "Motdepasse123";
+export const TEST_PASSWORD = "Tr0ubadour-Vert-2026";
 
 export interface CapturedEmail {
   to: string;
@@ -46,6 +47,7 @@ export async function tokenFor(user: { email: string }): Promise<string> {
 }
 
 export async function resetDatabase() {
+  resetThrottle();
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "RefreshToken", "OneTimeToken", "TicketMessage", "AiJob", "AiRun", "Ticket", "AuditLog", "User" RESTART IDENTITY CASCADE',
   );

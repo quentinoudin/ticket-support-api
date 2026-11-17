@@ -16,6 +16,7 @@ const descriptionSchema = z
   .string({ error: "La description est obligatoire" })
   .trim()
   .min(1, "La description est obligatoire")
+  .max(4000, "La description ne peut pas dépasser 4000 caractères")
   .refine(noNullCharacter, NULL_CHARACTER_MESSAGE);
 
 const statusSchema = z.enum(ticketStatuses, {

@@ -22,8 +22,27 @@ export function containsForbiddenContent(text: string): boolean {
 // les fermer ou les rouvrir pour faire passer ses phrases pour des instructions.
 const OUR_TAGS = /<\s*\/?\s*(?:ticket|conversation|message|system|instruction|instructions)[^>]*>/gi;
 
-export function neutralizeUntrusted(text: string, maxLength: number): string {
+// Données qui ne doivent jamais quitter l'application vers un fournisseur d'IA tiers : l'assistant n'en
+// a pas besoin pour trier ou conseiller, et les utilisateurs en collent souvent dans leurs tickets.
+const EMAIL_ANYWHERE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const IPV4 = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+const FR_PHONE = /(?:\+33|0033|\b0)\s?[1-9](?:[\s.-]?\d{2}){4}\b/g;
+const SECRET_WORD = /\b(mot de passe|mdp|password|passwd|pwd|code|token|jeton|clé|cle|secret)(\s*(?:est|:|=)?\s*)(\S+)/gi;
+const LONG_SECRET = /\b[A-Za-z0-9_-]{32,}\b/g;
+const CARD_NUMBER = /\b(?:\d[ -]?){13,19}\b/g;
+
+export function redactSensitive(text: string): string {
   return text
+    .replace(EMAIL_ANYWHERE, "[email masqué]")
+    .replace(SECRET_WORD, (_all, word: string, sep: string) => `${word}${sep}[secret masqué]`)
+    .replace(LONG_SECRET, "[secret masqué]")
+    .replace(FR_PHONE, "[téléphone masqué]")
+    .replace(CARD_NUMBER, "[numéro masqué]")
+    .replace(IPV4, "[adresse IP masquée]");
+}
+
+export function neutralizeUntrusted(text: string, maxLength: number): string {
+  return redactSensitive(text)
     .replace(/\u0000/g, "")
     .replace(OUR_TAGS, "[balise retirée]")
     .replace(/\r\n/g, "\n")

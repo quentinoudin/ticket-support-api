@@ -1,0 +1,7 @@
+# Les mots de passe des fixtures de tests et de l'audit sont factices (base jetable) : on les ignore.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixtures de tests et scénarios d'audit"
+paths = ['''^tests/''', '''^security-audit/''']
