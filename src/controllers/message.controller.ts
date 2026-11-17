@@ -4,6 +4,7 @@ import { createMessageSchema, feedbackSchema, listMessagesSchema } from "../sche
 import { ticketIdSchema } from "../schemas/ticket.schema.js";
 import * as feedbackService from "../services/feedback.service.js";
 import * as messageService from "../services/message.service.js";
+import { presentTicket } from "../services/ticket-view.js";
 
 export async function create(request: Request, response: Response): Promise<void> {
   const { id } = ticketIdSchema.parse(request.params);
@@ -18,7 +19,7 @@ export async function feedback(request: Request, response: Response): Promise<vo
   const input = feedbackSchema.parse(request.body);
   const ticket = await feedbackService.submitFeedback(request.user!, id, input);
 
-  response.status(200).json({ data: ticket });
+  response.status(200).json({ data: presentTicket(ticket, request.user!.role) });
 }
 
 export async function list(request: Request, response: Response): Promise<void> {

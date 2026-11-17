@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { getRequestContext } from "../lib/request-context.js";
 import type {
   AcceptInviteInput,
   ForgotPasswordInput,
@@ -9,6 +10,7 @@ import type {
   ResetPasswordInput,
 } from "../schemas/auth.schema.js";
 import { recordAudit } from "./audit.service.js";
+import { clearFailures, clearFailuresForEmail, isThrottled, registerFailure } from "./login-throttle.js";
 import { sendPasswordResetEmail } from "./mail.service.js";
 import {
   consumeOneTimeToken,
@@ -27,40 +29,18 @@ export function toPublicUser(user: { id: string; email: string; role: string; st
   return { id: user.id, email: user.email, role: user.role, status: user.status };
 }
 
-// Incrémente le compteur d'échecs ; à la limite, verrouille le compte et remet le compteur à zéro.
-async function registerFailedLogin(user: { id: string; email: string }) {
-  const { failedLoginCount } = await prisma.user.update({
-    where: { id: user.id },
-    data: { failedLoginCount: { increment: 1 } },
-    select: { failedLoginCount: true },
-  });
-
-  if (failedLoginCount >= env.LOGIN_MAX_ATTEMPTS) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginCount: 0,
-        lockedUntil: new Date(Date.now() + env.LOGIN_LOCK_MINUTES * 60 * 1000),
-      },
-    });
-
-    await recordAudit({
-      action: "ACCOUNT_LOCKED",
-      actor: { email: user.email },
-      targetType: "User",
-      targetId: user.id,
-      metadata: { lockMinutes: env.LOGIN_LOCK_MINUTES },
-    });
-  }
-}
+const TOO_MANY_ATTEMPTS = "Trop de tentatives de connexion, réessayez dans quelques minutes";
 
 export async function login({ email, password }: LoginInput) {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const ip = getRequestContext()?.ip ?? "inconnue";
 
-  // Un compte verrouillé refuse toute tentative, même avec le bon mot de passe.
-  if (user?.lockedUntil && user.lockedUntil > new Date()) {
-    throw new AppError("Compte temporairement verrouillé suite à trop d'échecs, réessayez plus tard", 429);
+  // Blocage par couple (email, IP) : identique pour un compte existant ou non, et sans effet sur
+  // le propriétaire légitime qui se connecte depuis une autre adresse.
+  if (isThrottled(email, ip)) {
+    throw new AppError(TOO_MANY_ATTEMPTS, 429);
   }
+
+  const user = await prisma.user.findUnique({ where: { email } });
 
   // Même réponse pour un email inconnu, un compte invité ou un mauvais mot de passe.
   const passwordMatches = await verifyPassword(password, user?.passwordHash ?? null);
@@ -73,12 +53,19 @@ export async function login({ email, password }: LoginInput) {
       ...(user && { targetType: "User" as const, targetId: user.id }),
     });
 
-    if (user) {
-      await registerFailedLogin(user);
+    if (registerFailure(email, ip)) {
+      await recordAudit({
+        action: "ACCOUNT_LOCKED",
+        actor: { email },
+        ...(user && { targetType: "User" as const, targetId: user.id }),
+        metadata: { lockMinutes: env.LOGIN_LOCK_MINUTES, scope: "email+ip" },
+      });
     }
 
     throw new AppError(INVALID_CREDENTIALS, 401);
   }
+
+  clearFailures(email, ip);
 
   if (user.status === "DISABLED") {
     await recordAudit({
@@ -107,7 +94,7 @@ export async function login({ email, password }: LoginInput) {
   const refresh = await issueRefreshToken(user.id);
 
   return {
-    accessToken: signAccessToken(user),
+    accessToken: signAccessToken(user, refresh.familyId),
     refreshToken: refresh.token,
     user: toPublicUser(user),
   };
@@ -135,8 +122,7 @@ export async function acceptInvite({ token, password }: AcceptInviteInput) {
   return toPublicUser(activated);
 }
 
-// Ne révèle jamais si l'email existe : l'appelant répond toujours la même chose.
-export async function forgotPassword({ email }: ForgotPasswordInput) {
+async function processForgotPassword({ email }: ForgotPasswordInput) {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || user.status !== "ACTIVE") {
@@ -159,6 +145,25 @@ export async function forgotPassword({ email }: ForgotPasswordInput) {
   }
 }
 
+// Travail lancé en arrière-plan : la réponse part tout de suite, que le compte existe ou non, donc
+// son temps de réponse ne révèle rien. Les tests attendent la fin avec settleBackgroundWork().
+const backgroundWork = new Set<Promise<void>>();
+
+export function settleBackgroundWork(): Promise<unknown> {
+  return Promise.allSettled([...backgroundWork]);
+}
+
+// Ne révèle jamais si l'email existe : l'appelant répond toujours la même chose, aussi vite.
+export function forgotPassword(input: ForgotPasswordInput): void {
+  const work = processForgotPassword(input)
+    .catch((error: unknown) => {
+      console.error("Échec du traitement de la réinitialisation :", error instanceof Error ? error.message : error);
+    })
+    .finally(() => backgroundWork.delete(work));
+
+  backgroundWork.add(work);
+}
+
 export async function resetPassword({ token, password }: ResetPasswordInput) {
   const user = await consumeOneTimeToken(token, "PASSWORD_RESET");
 
@@ -171,6 +176,7 @@ export async function resetPassword({ token, password }: ResetPasswordInput) {
     where: { id: user.id },
     data: { passwordHash: await hashPassword(password), failedLoginCount: 0, lockedUntil: null },
   });
+  clearFailuresForEmail(user.email);
 
   // Les sessions ouvertes et les autres liens de réinitialisation ne doivent plus fonctionner.
   await revokeAllRefreshTokens(user.id);
@@ -227,7 +233,7 @@ export async function refresh(refreshToken: string) {
   await prisma.refreshToken.update({ where: { id: record.id }, data: { replacedById: next.id } });
 
   return {
-    accessToken: signAccessToken(record.user),
+    accessToken: signAccessToken(record.user, record.familyId),
     refreshToken: next.token,
   };
 }

@@ -6,13 +6,27 @@ export const emailSchema = z
   .toLowerCase()
   .pipe(z.email("L'email n'est pas valide"));
 
+// Mots de passe les plus courants (français et anglais). On compare la base du mot de passe, sans les
+// chiffres et symboles ajoutés à la fin : « Password1234 » et « Azerty123456 » sont refusés.
+const COMMON_BASES = new Set([
+  "password", "motdepasse", "azerty", "azertyuiop", "qwerty", "qwertyuiop", "bonjour", "soleil", "admin",
+  "administrateur", "welcome", "bienvenue", "letmein", "iloveyou", "football", "marseille", "doudou", "chouchou",
+  "abcdefgh", "abcdefghij", "changeme", "secret", "master", "dragon", "monkey", "login", "azertyazerty", "supportit",
+]);
+
+function isCommonPassword(password: string): boolean {
+  const base = password.toLowerCase().replace(/[\d\W_]+/g, "");
+  return COMMON_BASES.has(base) || /^(.)+$/.test(base);
+}
+
 // bcrypt ignore tout ce qui dépasse 72 octets : on plafonne pour éviter les surprises.
 export const passwordSchema = z
   .string({ error: "Le mot de passe est obligatoire" })
-  .min(10, "Le mot de passe doit faire 10 caractères minimum")
+  .min(12, "Le mot de passe doit faire 12 caractères minimum")
   .max(72, "Le mot de passe ne peut pas dépasser 72 caractères")
   .regex(/[A-Za-z]/, "Le mot de passe doit contenir au moins une lettre")
-  .regex(/\d/, "Le mot de passe doit contenir au moins un chiffre");
+  .regex(/\d/, "Le mot de passe doit contenir au moins un chiffre")
+  .refine((value) => !isCommonPassword(value), "Ce mot de passe est trop courant : choisissez-en un autre");
 
 export const loginSchema = z
   .object({

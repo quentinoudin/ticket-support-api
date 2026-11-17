@@ -272,7 +272,10 @@ describe("jetons forgés", () => {
     const agent = await createUser({ email: "agent@test.local", role: "AGENT" });
     const { env } = await import("../src/config/env.js");
     const { default: jwt } = await import("jsonwebtoken");
-    const lying = jwt.sign({ role: "SUPER_ADMIN" }, env.JWT_ACCESS_SECRET, { subject: agent.id });
+    // Jeton signé avec le vrai secret et lié à une vraie session, mais qui ment sur le rôle.
+    const real = await request(app).post("/auth/login").send({ email: agent.email, password: TEST_PASSWORD });
+    const { sid } = jwt.decode(real.body.data.accessToken) as { sid: string };
+    const lying = jwt.sign({ role: "SUPER_ADMIN", sid }, env.JWT_ACCESS_SECRET, { subject: agent.id });
 
     const users = await request(app).get("/users").set(auth(lying));
     const audit = await request(app).get("/audit-logs").set(auth(lying));

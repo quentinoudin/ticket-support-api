@@ -1,0 +1,7 @@
+
+=== VULN-010 : description géante et création de tickets sans limite dédiée ===
+> POST /tickets {"title":"gros ticket","description":"AAAA…[masqué]…   [client 198.51.100.50]   (description de 95 000 caractères)
+< 400 {"error":"Données invalides","code":"VALIDATION_ERROR","details":[{"field":"description","message":"La description ne peut pas dépasser 4000 caractères"}]}  (11 ms)
+
+Création de 35 petits tickets à la suite :
+Codes obtenus : 29 × HTTP 201, 6 × HTTP 429

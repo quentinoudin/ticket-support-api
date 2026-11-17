@@ -1,0 +1,14 @@
+
+=== VULN-012 : mots de passe faibles acceptés et hygiène de la CI ===
+mot de passe testé : Abcdefgh12 (10 caractères)
+> POST /auth/accept-invite {"token":"znmH…[masqué]","password":"Abcdefgh12"}   [client 10.9.9.9]
+< 200 {"data":{"id":"9163…[masqué]","email":"faible050589@audit.local","role":"USER","status":"ACTIVE"}}  (514 ms)
+mot de passe testé : Password1234 (12 caractères)
+> POST /auth/accept-invite {"token":"Syuy…[masqué]","password":"Password1234"}   [client 10.9.9.9]
+< 200 {"data":{"id":"8ab5…[masqué]","email":"faible151530@audit.local","role":"USER","status":"ACTIVE"}}  (506 ms)
+mot de passe testé : Azerty123456 (12 caractères)
+> POST /auth/accept-invite {"token":"_9Iw…[masqué]","password":"Azerty123456"}   [client 10.9.9.9]
+< 200 {"data":{"id":"4fb4…[masqué]","email":"faible252166@audit.local","role":"USER","status":"ACTIVE"}}  (533 ms)
+$ grep -nE "uses:|npm audit|gitleaks" .github/workflows/ci.yml
+45:        uses: actions/checkout@v4
+48:        uses: actions/setup-node@v4

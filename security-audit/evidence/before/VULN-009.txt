@@ -1,0 +1,9 @@
+
+=== VULN-009 : limite de connexion partagée derrière un reverse proxy ===
+Chemin : client -> reverse proxy (:4000) -> API (:3999). Le proxy ajoute l'IP réelle du client dans X-Forwarded-For.
+Client A (198.51.100.1) : 10 tentatives envoyées, dernière réponse 401
+Client A, 11e tentative : 429 Trop de tentatives de connexion, réessayez dans quelques minutes
+Client B (198.51.100.2), 1re tentative, jamais vu : 429 Trop de tentatives de connexion, réessayez dans quelques minutes
+Client A avec un X-Forwarded-For forgé (9.9.9.9) : 429 Trop de tentatives de connexion, réessayez dans quelques minutes
+$ grep -i avertissement logs/serveur (démarrage en production, TRUST_PROXY=0)
+"(aucun avertissement au d�marrage)"

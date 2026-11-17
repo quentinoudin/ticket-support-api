@@ -42,10 +42,12 @@ jobs:
 
     steps:
       - name: Récupérer le code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Installer Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -55,6 +57,14 @@ jobs:
 
       - name: Générer le client Prisma
         run: npx prisma generate
+
+      - name: Auditer les dépendances de production
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Chercher des secrets dans l'historique
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Vérifier les types
         run: npm run typecheck

@@ -5,3 +5,11 @@ dist/
 .DS_Store
 src/generated/prisma/
 .claude/
+# Scripts d'essai locaux (peuvent manipuler des secrets) et journaux de l'audit
+scripts/test-*.ts
+security-audit/evidence/**/.*.log
+
+# Fichiers temporaires de Word et pages intermédiaires des captures
+~$*
+~WRL*.tmp
+security-audit/captures/.html/

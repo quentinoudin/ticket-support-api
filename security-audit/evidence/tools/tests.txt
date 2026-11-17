@@ -1,0 +1,7 @@
+$ npx vitest run   (après correctifs)
+ Test Files  29 passed (29)
+      Tests  422 passed (422)
+   Duration  553.96s (tests 91%, import 9%)
+
+$ npx tsc --noEmit
+(aucune erreur de types)

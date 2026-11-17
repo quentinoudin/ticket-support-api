@@ -60,13 +60,13 @@ describe("access token JWT", () => {
   const user = { id: "5b0c1a52-7c4e-4a2b-9f0d-2f6f2f6f2f6f", role: "AGENT" as const };
 
   it("contient l'identifiant et le rôle", () => {
-    const payload = verifyAccessToken(signAccessToken(user));
+    const payload = verifyAccessToken(signAccessToken(user, "session-1"));
 
-    expect(payload).toEqual({ sub: user.id, role: "AGENT" });
+    expect(payload).toEqual({ sub: user.id, role: "AGENT", sid: "session-1" });
   });
 
   it("refuse un jeton modifié, signé avec un autre secret ou expiré", () => {
-    const valid = signAccessToken(user);
+    const valid = signAccessToken(user, "session-1");
     const tampered = `${valid.slice(0, -4)}AAAA`;
     const otherSecret = jwt.sign({ role: "SUPER_ADMIN" }, "un-autre-secret-de-plus-de-32-caracteres!", {
       subject: user.id,

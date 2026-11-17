@@ -1,0 +1,16 @@
+
+=== VULN-012 : mots de passe faibles acceptés et hygiène de la CI ===
+mot de passe testé : Abcdefgh12 (10 caractères)
+> POST /auth/accept-invite {"token":"GUoN…[masqué]","password":"Abcdefgh12"}   [client 10.9.9.9]
+< 400 {"error":"Données invalides","code":"VALIDATION_ERROR","details":[{"field":"password","message":"Le mot de passe doit faire 12 caractères minimum"},{"field":"password","message":"Ce mot de passe est t…  (6 ms)
+mot de passe testé : Password1234 (12 caractères)
+> POST /auth/accept-invite {"token":"0xCK…[masqué]","password":"Password1234"}   [client 10.9.9.9]
+< 400 {"error":"Données invalides","code":"VALIDATION_ERROR","details":[{"field":"password","message":"Ce mot de passe est trop courant : choisissez-en un autre"}]}  (3 ms)
+mot de passe testé : Azerty123456 (12 caractères)
+> POST /auth/accept-invite {"token":"J6S0…[masqué]","password":"Azerty123456"}   [client 10.9.9.9]
+< 400 {"error":"Données invalides","code":"VALIDATION_ERROR","details":[{"field":"password","message":"Ce mot de passe est trop courant : choisissez-en un autre"}]}  (4 ms)
+$ grep -nE "uses:|npm audit|gitleaks" .github/workflows/ci.yml
+45:        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+50:        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+62:        run: npm audit --omit=dev --audit-level=high
+65:        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2

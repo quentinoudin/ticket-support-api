@@ -1,4 +1,5 @@
 import request from "supertest";
+import { settleBackgroundWork } from "../src/services/auth.service.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.js";
@@ -136,6 +137,7 @@ describe("journal de l'authentification", () => {
 
     await request(app).post("/auth/accept-invite").send({ token: inviteToken, password: "NouveauMdp2026" });
     await request(app).post("/auth/forgot-password").send({ email: "nouveau@test.local" });
+    await settleBackgroundWork();
     const resetToken = extractToken(emails[1]);
     await request(app).post("/auth/reset-password").send({ token: resetToken, password: "EncoreUnAutre2026" });
 
@@ -153,6 +155,8 @@ describe("journal de l'authentification", () => {
     await setup();
 
     await request(app).post("/auth/forgot-password").send({ email: "inconnu@test.local" });
+
+    await settleBackgroundWork();
 
     expect(await logsFor("PASSWORD_RESET_REQUESTED")).toHaveLength(0);
   });

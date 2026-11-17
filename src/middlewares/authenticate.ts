@@ -3,7 +3,7 @@ import type { RequestHandler } from "express";
 import { AppError } from "../errors/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { setContextActor } from "../lib/request-context.js";
-import { verifyAccessToken } from "../services/token.service.js";
+import { isSessionActive, verifyAccessToken } from "../services/token.service.js";
 
 // Recharge l'utilisateur à chaque requête : un compte désactivé perd l'accès immédiatement.
 export const authenticate: RequestHandler = async (request, _response, next) => {
@@ -14,6 +14,12 @@ export const authenticate: RequestHandler = async (request, _response, next) => 
   }
 
   const payload = verifyAccessToken(header.slice("Bearer ".length));
+
+  // Session révoquée (déconnexion, réinitialisation de mot de passe, désactivation) : refus immédiat.
+  if (!(await isSessionActive(payload.sid))) {
+    throw new AppError("Jeton d'accès invalide ou expiré", 401);
+  }
+
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
 
   if (!user || user.status !== "ACTIVE") {

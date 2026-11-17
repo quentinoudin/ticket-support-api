@@ -1,14 +1,14 @@
-﻿services:
+services:
   postgres:
     image: postgres:17-alpine
     container_name: ticket-support-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ticket_user
-      POSTGRES_PASSWORD: ticket_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ticket_password}
       POSTGRES_DB: ticket_support
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +22,8 @@
     container_name: ticket-support-mailpit
     restart: unless-stopped
     ports:
-      - "1026:1025"
-      - "8026:8025"
+      - "127.0.0.1:1026:1025"
+      - "127.0.0.1:8026:8025"
 
 volumes:
   postgres_data:

@@ -1,0 +1,8 @@
+
+=== VULN-011 : documentation de l'API publique (instance lancée en NODE_ENV=production) ===
+> GET /docs/  (sans authentification)
+< 404
+> GET /openapi.json  (sans authentification)
+< 404
+> GET /health  (sans authentification)
+< 200

@@ -1,0 +1,12 @@
+
+=== VULN-001 : mot de passe Super Admin dans un script non ignoré ===
+$ git status --short scripts/
+?? scripts/test-deepseek.ts
+$ git check-ignore -v scripts/test-deepseek.ts || echo "(fichier NON ignore par .gitignore)"
+"(fichier NON ignore par .gitignore)"
+$ grep -n "SUPER_ADMIN_PASSWORD" scripts/test-deepseek.ts
+18:const ADMIN_PASSWORD = (process.env.SUPER_ADMIN_PASSWORD ?? "********").trim();
+$ git add -A --dry-run scripts/
+add 'scripts/test-deepseek.ts'
+$ comparer la valeur en dur avec SUPER_ADMIN_PASSWORD de .env (sans l'afficher)
+mot de passe en dur trouvé : IDENTIQUE à celui de .env

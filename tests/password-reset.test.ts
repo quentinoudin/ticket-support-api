@@ -1,4 +1,5 @@
 import request from "supertest";
+import { settleBackgroundWork } from "../src/services/auth.service.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { app } from "../src/app.js";
@@ -16,6 +17,8 @@ describe("POST /auth/forgot-password", () => {
 
     const response = await request(app).post("/auth/forgot-password").send({ email: " AGENT@test.local" });
 
+    await settleBackgroundWork();
+
     expect(response.status).toBe(200);
     expect(emails).toHaveLength(1);
     expect(emails[0]!.to).toBe("agent@test.local");
@@ -29,9 +32,14 @@ describe("POST /auth/forgot-password", () => {
     await createUser({ email: "off@test.local", status: "DISABLED" });
 
     const known = await request(app).post("/auth/forgot-password").send({ email: "agent@test.local" });
+
+    await settleBackgroundWork();
     const unknown = await request(app).post("/auth/forgot-password").send({ email: "inconnu@test.local" });
+    await settleBackgroundWork();
     const invited = await request(app).post("/auth/forgot-password").send({ email: "invite@test.local" });
+    await settleBackgroundWork();
     const disabled = await request(app).post("/auth/forgot-password").send({ email: "off@test.local" });
+    await settleBackgroundWork();
 
     expect(unknown.status).toBe(known.status);
     expect(unknown.body).toEqual(known.body);
@@ -46,11 +54,14 @@ describe("POST /auth/forgot-password", () => {
 
     const response = await request(app).post("/auth/forgot-password").send({ email: "agent@test.local" });
 
+    await settleBackgroundWork();
+
     expect(response.status).toBe(200);
   });
 
   it("renvoie 400 pour un email invalide", async () => {
     const response = await request(app).post("/auth/forgot-password").send({ email: "nope" });
+    await settleBackgroundWork();
 
     expect(response.status).toBe(400);
   });
@@ -61,6 +72,7 @@ describe("POST /auth/reset-password", () => {
     const emails = await captureEmails();
     const user = await createUser({ email: "agent@test.local", role: "AGENT" });
     await request(app).post("/auth/forgot-password").send({ email: user.email });
+    await settleBackgroundWork();
 
     return { user, emails, token: extractToken(emails[0]) };
   }
@@ -98,6 +110,7 @@ describe("POST /auth/reset-password", () => {
   it("un nouveau lien invalide le précédent", async () => {
     const { emails, token: firstToken } = await requestReset();
     await request(app).post("/auth/forgot-password").send({ email: "agent@test.local" });
+    await settleBackgroundWork();
     const secondToken = extractToken(emails[1]);
 
     const oldLink = await request(app).post("/auth/reset-password").send({ token: firstToken, password: NEW_PASSWORD });
