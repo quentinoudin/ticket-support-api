@@ -1,0 +1,11 @@
+$ skillspector scan <sources du projet> --no-llm --format json   (résumé)
+score 100 CRITICAL | couverture 82.2 %
+26 x LOW SC1 Unpinned Dependencies
+10 x HIGH PE3 Credential Access
+5 x MEDIUM E1 External Transmission
+4 x MEDIUM RP1 MCP server referenced without pinned version: 'npx prisma'.
+3 x HIGH TM1 Tool Parameter Abuse
+1 x HIGH YR4 YARA rule 'agent_skill_mcp_tool_poisoning_metadata': MCP/too
+1 x LOW SC4 Unverifiable Dependency: bcrypt has 1 known advisory(ies) (C
+1 x LOW SC4 Unverifiable Dependency: express has 5 known advisory(ies) (
+=> outil conçu pour des skills d agents IA : constats non pertinents pour une API (README, tests, versions ^).

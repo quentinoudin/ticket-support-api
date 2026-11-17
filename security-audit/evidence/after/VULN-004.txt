@@ -1,0 +1,30 @@
+
+=== VULN-004 : énumération de comptes via la réponse de verrouillage ===
+
+--- compte EXISTANT (victim@audit.local), 6 tentatives depuis 203.0.113.5 ---
+> POST /auth/login {"email":"victim@audit.local","password":"devine-1"}   [client 203.0.113.5]   (essai 1)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (491 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-2"}   [client 203.0.113.5]   (essai 2)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (523 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-3"}   [client 203.0.113.5]   (essai 3)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (503 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-4"}   [client 203.0.113.5]   (essai 4)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (493 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-5"}   [client 203.0.113.5]   (essai 5)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (498 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-6"}   [client 203.0.113.5]   (essai 6)
+< 429 {"error":"Trop de tentatives de connexion, réessayez dans quelques minutes","code":"RATE_LIMITED"}  (4 ms)
+
+--- compte INEXISTANT (fantome@audit.local), 6 tentatives depuis 203.0.113.6 ---
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-1"}   [client 203.0.113.6]   (essai 1)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (510 ms)
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-2"}   [client 203.0.113.6]   (essai 2)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (489 ms)
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-3"}   [client 203.0.113.6]   (essai 3)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (511 ms)
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-4"}   [client 203.0.113.6]   (essai 4)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (485 ms)
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-5"}   [client 203.0.113.6]   (essai 5)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (487 ms)
+> POST /auth/login {"email":"fantome@audit.local","password":"devine-6"}   [client 203.0.113.6]   (essai 6)
+< 429 {"error":"Trop de tentatives de connexion, réessayez dans quelques minutes","code":"RATE_LIMITED"}  (3 ms)

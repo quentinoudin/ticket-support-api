@@ -1,0 +1,17 @@
+
+=== VULN-003 : blocage d'un compte par un tiers (déni de service ciblé) ===
+L'attaquant (203.0.113.5) ne connaît que l'e-mail de la victime.
+> POST /auth/login {"email":"victim@audit.local","password":"devine-1"}   [client 203.0.113.5]   (attaquant, essai 1)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (338 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-2"}   [client 203.0.113.5]   (attaquant, essai 2)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (340 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-3"}   [client 203.0.113.5]   (attaquant, essai 3)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (252 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-4"}   [client 203.0.113.5]   (attaquant, essai 4)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (226 ms)
+> POST /auth/login {"email":"victim@audit.local","password":"devine-5"}   [client 203.0.113.5]   (attaquant, essai 5)
+< 401 {"error":"Email ou mot de passe incorrect","code":"UNAUTHORIZED"}  (247 ms)
+
+La victime légitime (198.51.100.7) se connecte avec son BON mot de passe :
+> POST /auth/login {"email":"victim@audit.local","password":"Passw0rd-USER1"}   [client 198.51.100.7]   (victime, bon mot de passe)
+< 200 {"data":{"accessToken":"eyJhbGciO…[jeton masqué]…  (243 ms)

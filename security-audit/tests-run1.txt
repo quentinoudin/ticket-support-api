@@ -1,0 +1,661 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 C:/Users/quent/ticket-support-api
+
+ ❯ tests/ai-conversation.test.ts (32 tests | 1 failed) 60843ms
+   ❯ POST /tickets/:id/feedback (14)
+     × « pas résolu » escalade vers l'équipe support avec un message d'information 1933ms
+ ❯ tests/ai-triage.test.ts (33 tests | 2 failed) 42271ms
+   ❯ ticket du périmètre (6)
+     × peut aussi relever une priorité sous-estimée 1264ms
+     × ne journalise rien quand la priorité reste la même 1267ms
+ ❯ tests/tickets.test.ts (11 tests | 1 failed) 30360ms
+   ❯ création (2)
+     × enregistre l'auteur du ticket 3073ms
+ ❯ tests/security.test.ts (46 tests | 8 failed) 29249ms
+   ❯ injection SQL dans l'authentification (8)
+     × login avec "Robert'); DROP TABLE \"User\";--" : jamais de connexion, jamais d'erreur serveur 342ms
+     × login avec "\\'; TRUNCATE \"AuditLog\"; --" : jamais de connexion, jamais d'erreur serveur 333ms
+   ❯ validation des données entrantes (6)
+     × refuse les objets, tableaux et opérateurs de type NoSQL à la place d'un texte 344ms
+     × refuse les champs supplémentaires, y compris la pollution de prototype 328ms
+     × refuse un caractère nul, que PostgreSQL ne sait pas stocker, avec un 400 et non un 500 335ms
+     × gère les très longues chaînes et les caractères Unicode sans erreur serveur 341ms
+     × refuse un corps qui n'est pas du JSON ou un type de contenu inattendu 335ms
+   ❯ jetons forgés (2)
+     × ignore le rôle écrit dans le jeton : c'est celui de la base qui compte 360ms
+ ❯ tests/audit.test.ts (18 tests | 10 failed) 21480ms
+   ❯ journal de l'authentification (4)
+     × enregistre l'acceptation d'invitation, la demande et la fin de réinitialisation, sans les jetons 944ms
+     × n'enregistre pas de demande de réinitialisation pour un email inconnu 931ms
+   ❯ journal des tickets (3)
+     × enregistre création, modification, remplacement et suppression 936ms
+     × ne copie jamais la description d'un ticket dans le journal 907ms
+     × une modification refusée à un USER n'est pas journalisée 922ms
+   ❯ robustesse (1)
+     × une panne d'écriture du journal ne fait pas échouer l'action 929ms
+   ❯ GET /audit-logs (4)
+     × est réservé au Super Admin 925ms
+     × filtre par action, par cible et par acteur, avec pagination 1004ms
+     × filtre par période 931ms
+     × refuse une action inconnue, un identifiant invalide ou une date invalide 915ms
+ ❯ tests/rate-limit.test.ts (7 tests | 4 failed) 4832ms
+   ❯ verrouillage du compte après des échecs de connexion (5)
+     × ne verrouille pas avant la limite et remet le compteur à zéro après un succès 371ms
+     × se déverrouille à l'expiration du délai 371ms
+     × n'a aucun effet sur un email inconnu, qui répond toujours 401 1491ms
+     × une réinitialisation de mot de passe lève le verrouillage 364ms
+stderr | tests/password-reset.test.ts > POST /auth/reset-password > révoque toutes les sessions ouvertes
+Échec du traitement de la réinitialisation : 
+Invalid `prisma.oneTimeToken.create()` invocation in
+C:/Users/quent/ticket-support-api/src/services/token.service.ts:80:25
+
+  77   where: { userId, type, usedAt: null },
+  78   data: { usedAt: new Date() },
+  79 }),
+→ 80 prisma.oneTimeToken.create(
+Foreign key constraint violated on the constraint: `OneTimeToken_userId_fkey`
+
+stderr | tests/password-reset.test.ts > POST /auth/reset-password > un nouveau lien invalide le précédent
+Échec du traitement de la réinitialisation : 
+Invalid `prisma.oneTimeToken.create()` invocation in
+C:/Users/quent/ticket-support-api/src/services/token.service.ts:80:25
+
+  77   where: { userId, type, usedAt: null },
+  78   data: { usedAt: new Date() },
+  79 }),
+→ 80 prisma.oneTimeToken.create(
+Foreign key constraint violated on the constraint: `OneTimeToken_userId_fkey`
+
+stderr | tests/password-reset.test.ts > POST /auth/reset-password > refuse un jeton inconnu, expiré, un mot de passe faible, ou un compte désactivé entre-temps
+Échec du traitement de la réinitialisation : 
+Invalid `prisma.oneTimeToken.create()` invocation in
+C:/Users/quent/ticket-support-api/src/services/token.service.ts:80:25
+
+  77   where: { userId, type, usedAt: null },
+  78   data: { usedAt: new Date() },
+  79 }),
+→ 80 prisma.oneTimeToken.create(
+Foreign key constraint violated on the constraint: `OneTimeToken_userId_fkey`
+
+stderr | tests/password-reset.test.ts > POST /auth/reset-password > refuse un lien expiré
+Échec du traitement de la réinitialisation : 
+Invalid `prisma.oneTimeToken.create()` invocation in
+C:/Users/quent/ticket-support-api/src/services/token.service.ts:80:25
+
+  77   where: { userId, type, usedAt: null },
+  78   data: { usedAt: new Date() },
+  79 }),
+→ 80 prisma.oneTimeToken.create(
+Foreign key constraint violated on the constraint: `OneTimeToken_userId_fkey`
+
+ ❯ tests/password-reset.test.ts (9 tests | 7 failed) 3369ms
+   ❯ POST /auth/forgot-password (4)
+     × envoie un lien à un compte actif 579ms
+     × répond exactement pareil pour un email inconnu, invité ou désactivé, sans rien envoyer 683ms
+   ❯ POST /auth/reset-password (5)
+     × change le mot de passe, une seule fois 334ms
+     × révoque toutes les sessions ouvertes 343ms
+     × un nouveau lien invalide le précédent 343ms
+     × refuse un jeton inconnu, expiré, un mot de passe faible, ou un compte désactivé entre-temps 330ms
+     × refuse un lien expiré 344ms
+ ❯ tests/unit/password-and-tokens.test.ts (9 tests | 1 failed) 2222ms
+   ❯ access token JWT (4)
+     × contient l'identifiant et le rôle 8ms
+ ❯ tests/unit/schemas.test.ts (27 tests | 1 failed) 24ms
+   ❯ passwordSchema (5)
+     × accepte un mot de passe de 10 à 72 caractères avec une lettre et un chiffre 6ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 35 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/ai-conversation.test.ts > POST /tickets/:id/feedback > « pas résolu » escalade vers l'équipe support avec un message d'information
+AssertionError: expected { …(8) } to match object { status: 'OPEN', …(2) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "aiEscalationReason": "USER_NOT_SATISFIED",
+    "aiHandling": "ESCALATED",
+    "status": "OPEN",
+  }
+
+ ❯ tests/ai-conversation.test.ts:268:32
+    266|
+    267|     expect(response.status).toBe(200);
+    268|     expect(response.body.data).toMatchObject({
+       |                                ^
+    269|       status: "OPEN",
+    270|       aiHandling: "ESCALATED",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/35]⎯
+
+ FAIL  tests/ai-triage.test.ts > ticket du périmètre > peut aussi relever une priorité sous-estimée
+AssertionError: expected { …(14) } to match object { priority: 'URGENT', …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "priority": "URGENT",
++   "priority": "HIGH",
+    "requestedPriority": "LOW",
+  }
+
+ ❯ tests/ai-triage.test.ts:120:40
+    118|     await runJobs();
+    119|
+    120|     expect(await ticketRow(ticket.id)).toMatchObject({ priority: "URGE…
+       |                                        ^
+    121|   });
+    122|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/35]⎯
+
+ FAIL  tests/ai-triage.test.ts > ticket du périmètre > ne journalise rien quand la priorité reste la même
+AssertionError: expected [ { …(10) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/ai-triage.test.ts:130:50
+    128|     await runJobs();
+    129|
+    130|     expect(await auditOf("AI_PRIORITY_CHANGED")).toHaveLength(0);
+       |                                                  ^
+    131|   });
+    132|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/35]⎯
+
+ FAIL  tests/audit.test.ts > journal de l'authentification > enregistre l'acceptation d'invitation, la demande et la fin de réinitialisation, sans les jetons
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ tests/audit.test.ts:139:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/35]⎯
+
+ FAIL  tests/audit.test.ts > journal de l'authentification > n'enregistre pas de demande de réinitialisation pour un email inconnu
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:153:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/35]⎯
+
+ FAIL  tests/audit.test.ts > journal des tickets > enregistre création, modification, remplacement et suppression
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:165:40
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/35]⎯
+
+ FAIL  tests/audit.test.ts > journal des tickets > ne copie jamais la description d'un ticket dans le journal
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:191:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/35]⎯
+
+ FAIL  tests/audit.test.ts > journal des tickets > une modification refusée à un USER n'est pas journalisée
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:205:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/35]⎯
+
+ FAIL  tests/audit.test.ts > robustesse > une panne d'écriture du journal ne fait pas échouer l'action
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:222:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/35]⎯
+
+ FAIL  tests/audit.test.ts > GET /audit-logs > est réservé au Super Admin
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:238:40
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/35]⎯
+
+ FAIL  tests/audit.test.ts > GET /audit-logs > filtre par action, par cible et par acteur, avec pagination
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:253:47
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/35]⎯
+
+ FAIL  tests/audit.test.ts > GET /audit-logs > filtre par période
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:271:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/35]⎯
+
+ FAIL  tests/audit.test.ts > GET /audit-logs > refuse une action inconnue, un identifiant invalide ou une date invalide
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ setup tests/audit.test.ts:23:83
+ ❯ tests/audit.test.ts:285:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/forgot-password > envoie un lien à un compte actif
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/password-reset.test.ts:20:20
+     18|
+     19|     expect(response.status).toBe(200);
+     20|     expect(emails).toHaveLength(1);
+       |                    ^
+     21|     expect(emails[0]!.to).toBe("agent@test.local");
+     22|     expect(emails[0]!.text).toContain("/auth/reset-password?token=");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/forgot-password > répond exactement pareil pour un email inconnu, invité ou désactivé, sans rien envoyer
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/password-reset.test.ts:40:20
+     38|     expect(invited.body).toEqual(known.body);
+     39|     expect(disabled.body).toEqual(known.body);
+     40|     expect(emails).toHaveLength(1);
+       |                    ^
+     41|   });
+     42|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/reset-password > change le mot de passe, une seule fois
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ requestReset tests/password-reset.test.ts:65:35
+ ❯ tests/password-reset.test.ts:69:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/reset-password > révoque toutes les sessions ouvertes
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ requestReset tests/password-reset.test.ts:65:35
+ ❯ tests/password-reset.test.ts:87:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/reset-password > un nouveau lien invalide le précédent
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ requestReset tests/password-reset.test.ts:65:35
+ ❯ tests/password-reset.test.ts:99:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/reset-password > refuse un jeton inconnu, expiré, un mot de passe faible, ou un compte désactivé entre-temps
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ requestReset tests/password-reset.test.ts:65:35
+ ❯ tests/password-reset.test.ts:113:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/35]⎯
+
+ FAIL  tests/password-reset.test.ts > POST /auth/reset-password > refuse un lien expiré
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ requestReset tests/password-reset.test.ts:65:35
+ ❯ tests/password-reset.test.ts:126:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/35]⎯
+
+ FAIL  tests/rate-limit.test.ts > verrouillage du compte après des échecs de connexion > ne verrouille pas avant la limite et remet le compteur à zéro après un succès
+AssertionError: expected 429 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 429
+
+ ❯ tests/rate-limit.test.ts:82:28
+     80|       .send({ email: "agent@test.local", password: TEST_PASSWORD });
+     81|
+     82|     expect(success.status).toBe(200);
+       |                            ^
+     83|     expect(stillOk.status).toBe(200);
+     84|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/35]⎯
+
+ FAIL  tests/rate-limit.test.ts > verrouillage du compte après des échecs de connexion > se déverrouille à l'expiration du délai
+AssertionError: expected 429 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 429
+
+ ❯ tests/rate-limit.test.ts:95:29
+     93|       .send({ email: "agent@test.local", password: TEST_PASSWORD });
+     94|
+     95|     expect(response.status).toBe(200);
+       |                             ^
+     96|   });
+     97|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/35]⎯
+
+ FAIL  tests/rate-limit.test.ts > verrouillage du compte après des échecs de connexion > n'a aucun effet sur un email inconnu, qui répond toujours 401
+AssertionError: expected Set{ 401, 429 } to deeply equal Set{ 401 }
+
+- Expected
++ Received
+
+  Set {
+    401,
++   429,
+  }
+
+ ❯ tests/rate-limit.test.ts:104:30
+    102|     }
+    103|
+    104|     expect(new Set(results)).toEqual(new Set([401]));
+       |                              ^
+    105|   });
+    106|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/35]⎯
+
+ FAIL  tests/rate-limit.test.ts > verrouillage du compte après des échecs de connexion > une réinitialisation de mot de passe lève le verrouillage
+Error: Aucun jeton trouvé dans l'email
+ ❯ extractToken tests/helpers.ts:35:11
+     33|
+     34|   if (!match?.[1]) {
+     35|     throw new Error("Aucun jeton trouvé dans l'email");
+       |           ^
+     36|   }
+     37|
+ ❯ tests/rate-limit.test.ts:115:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/35]⎯
+
+ FAIL  tests/security.test.ts > injection SQL dans l'authentification > login avec "Robert'); DROP TABLE \"User\";--" : jamais de connexion, jamais d'erreur serveur
+ FAIL  tests/security.test.ts > injection SQL dans l'authentification > login avec "\\'; TRUNCATE \"AuditLog\"; --" : jamais de connexion, jamais d'erreur serveur
+AssertionError: expected 429 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 429
+
+ ❯ tests/security.test.ts:115:31
+    113|
+    114|     expect(asEmail.status).toBe(400);
+    115|     expect(asPassword.status).toBe(401);
+       |                               ^
+    116|     expect(asRefresh.status).toBe(401);
+    117|     expect(asReset.status).toBe(400);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/35]⎯
+
+ FAIL  tests/security.test.ts > validation des données entrantes > refuse les objets, tableaux et opérateurs de type NoSQL à la place d'un texte
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ tests/security.test.ts:136:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/35]⎯
+
+ FAIL  tests/security.test.ts > validation des données entrantes > refuse les champs supplémentaires, y compris la pollution de prototype
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ tests/security.test.ts:154:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/35]⎯
+
+ FAIL  tests/security.test.ts > validation des données entrantes > refuse un caractère nul, que PostgreSQL ne sait pas stocker, avec un 400 et non un 500
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ tests/security.test.ts:196:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/35]⎯
+
+ FAIL  tests/security.test.ts > validation des données entrantes > gère les très longues chaînes et les caractères Unicode sans erreur serveur
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ tests/security.test.ts:211:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/35]⎯
+
+ FAIL  tests/security.test.ts > validation des données entrantes > refuse un corps qui n'est pas du JSON ou un type de contenu inattendu
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+ ❯ tokenFor tests/helpers.ts:45:29
+     43|   const { app } = await import("../src/app.js");
+     44|   const response = await request(app).post("/auth/login").send({ email…
+     45|   return response.body.data.accessToken as string;
+       |                             ^
+     46| }
+     47|
+ ❯ tests/security.test.ts:229:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/35]⎯
+
+ FAIL  tests/security.test.ts > jetons forgés > ignore le rôle écrit dans le jeton : c'est celui de la base qui compte
+AssertionError: expected 401 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 401
+
+ ❯ tests/security.test.ts:280:26
+    278|     const audit = await request(app).get("/audit-logs").set(auth(lying…
+    279|
+    280|     expect(users.status).toBe(403);
+       |                          ^
+    281|     expect(audit.status).toBe(403);
+    282|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/35]⎯
+
+ FAIL  tests/tickets.test.ts > création > enregistre l'auteur du ticket
+AssertionError: expected { …(8) } to match object { status: 'OPEN', …(2) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "createdById": "55e09ed4-b8fc-4df4-8052-79d7cc93a030",
+    "priority": "HIGH",
+    "status": "OPEN",
+  }
+
+ ❯ tests/tickets.test.ts:57:32
+     55|
+     56|     expect(response.status).toBe(201);
+     57|     expect(response.body.data).toMatchObject({ status: "OPEN", priorit…
+       |                                ^
+     58|   });
+     59|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/35]⎯
+
+ FAIL  tests/unit/password-and-tokens.test.ts > access token JWT > contient l'identifiant et le rôle
+AppError: Jeton d'accès invalide ou expiré
+ ❯ verifyAccessToken src/services/token.service.ts:35:11
+     33|     return { sub: payload.sub, role: payload.role as UserRole, sid: pa…
+     34|   } catch {
+     35|     throw new AppError("Jeton d'accès invalide ou expiré", 401);
+       |           ^
+     36|   }
+     37| }
+ ❯ tests/unit/password-and-tokens.test.ts:63:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/35]⎯
+
+ FAIL  tests/unit/schemas.test.ts > passwordSchema > accepte un mot de passe de 10 à 72 caractères avec une lettre et un chiffre
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/unit/schemas.test.ts:34:61
+     32| describe("passwordSchema", () => {
+     33|   it("accepte un mot de passe de 10 à 72 caractères avec une lettre et…
+     34|     expect(passwordSchema.safeParse("Motdepasse1").success).toBe(true);
+       |                                                             ^
+     35|     expect(passwordSchema.safeParse("a1".repeat(36)).success).toBe(tru…
+     36|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/35]⎯
+
+
+ Test Files  9 failed | 18 passed (27)
+      Tests  35 failed | 376 passed (411)
+   Start at  14:44:11
+   Duration  361.26s (tests 89%, import 11%)
+

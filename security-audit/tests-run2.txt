@@ -1,0 +1,52 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 C:/Users/quent/ticket-support-api
+
+ ❯ tests/security.test.ts (46 tests | 1 failed) 31179ms
+   ❯ jetons forgés (2)
+     × ignore le rôle écrit dans le jeton : c'est celui de la base qui compte 342ms
+ ❯ tests/security-audit-fixes.test.ts (6 tests | 1 failed) 4063ms
+   ❯ VULN-007 : masquage avant envoi au LLM (1)
+     × masque e-mails, IP, téléphone, mots de passe et longues clés 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security-audit-fixes.test.ts > VULN-007 : masquage avant envoi au LLM > masque e-mails, IP, téléphone, mots de passe et longues clés
+TypeError: redactSensitive is not a function
+ ❯ tests/security-audit-fixes.test.ts:77:17
+     75| describe("VULN-007 : masquage avant envoi au LLM", () => {
+     76|   it("masque e-mails, IP, téléphone, mots de passe et longues clés", (…
+     77|     const out = redactSensitive(
+       |                 ^
+     78|       "Je suis jean@entreprise.fr, IP 192.168.10.45, mon mot de passe …
+     79|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/security.test.ts > jetons forgés > ignore le rôle écrit dans le jeton : c'est celui de la base qui compte
+AssertionError: expected 401 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 401
+
+ ❯ tests/security.test.ts:280:26
+    278|     const audit = await request(app).get("/audit-logs").set(auth(lying…
+    279|
+    280|     expect(users.status).toBe(403);
+       |                          ^
+    281|     expect(audit.status).toBe(403);
+    282|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 12 passed (14)
+      Tests  2 failed | 233 passed (235)
+   Start at  14:51:58
+   Duration  143.77s (tests 87%, import 11%, transform 1%)
+
